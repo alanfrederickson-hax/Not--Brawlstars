@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -14,23 +14,37 @@
          It gives us pre-built functions like circle(), rect(), and the magic draw() loop. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
 
-
     <!-- CSS Styling to ensure our game canvas takes up the whole screen without scrollbars -->
     <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrollbars from appearing when things move to the edge */
+            background-color: #000;
+        }
+        canvas {
+            display: block; /* Removes weird margins around the canvas element */
+        }
+    </style>
+</head>
+<body>
+    <script>
         /* =================================================================================
            GLOBAL VARIABLES
-           These variables store data that needs to be accessed by multiple different functions
-           throughout the game. 
+           These variables are declared OUTSIDE of any function. That makes them "Global".
+           A global variable can be read and changed by ANY function in the entire game.
            ================================================================================= */
 
 // --- UI Elements ---
-let buttons = []; // Stores all our clickable buttons for the menus
-let players = []; // Stores the visual representations of players in the lobby
-let lobbyMusic; // Audio variable for the main menu background track
-let gameMusic; // Game audio variable for the battle track
+// Arrays are lists. We define an empty list using brackets: []
+let buttons = []; // We will fill this list with all our clickable buttons later
+let players = []; // We will fill this list with the visual players shown in the lobby
+let lobbyMusic; // A variable to hold our lobby music player
+let gameMusic;  // A variable to hold our battle music player
+let customFont; // Variable to hold our downloaded local font file
 
 // --- Menu Variables ---
-// A list of all available characters users can pick
+// A list (Array) of all available characters users can pick. We use strings (text inside quotes).
 let brawlerList = [
   "Shelly",
   "Colt",
@@ -43,37 +57,57 @@ let brawlerList = [
   "Doug",
   "Barley",
 ];
-let leftMenuOpen = false; // Tracks if Player 1's character select menu is open
-let rightMenuOpen = false; // Tracks if Player 2's character select menu is open
-let brawlerImages = {}; // A dictionary to store the loaded image files so we don't reload them constantly
+// Booleans are variables that are ONLY true or false. We use them as on/off switches for the menus.
+let leftMenuOpen = false; 
+let rightMenuOpen = false; 
+
+/* Let's talk about {} !
+  When you see `let varName = {}`, you are creating an empty JavaScript "Object".
+  An Object is like a digital backpack. You can store multiple named things inside it.
+  Here, brawlerImages is an empty backpack. Later, we will store images in it, labeled
+  by the brawler's name. Example: brawlerImages["Leon"] = (The actual picture of Leon).
+*/
+let brawlerImages = {}; 
 let bgGraphics; // Cache for background to prevent lag (stores a static image of the lobby background)
 
 // --- Game State Variables ---
-// gameState acts as a "State Machine", telling the game whether to draw the Lobby menu or the Battle arena
+// gameState acts as a "State Machine", a core concept in game design.
+// If the state is "LOBBY", the draw() loop only runs the lobby menu code.
+// If the state is "GAME", it ignores the menu code and runs the fighting code!
 let gameState = "LOBBY";
-let lastWinner = null; // Tracks who won the last game ("blue", "red", or "tie") to draw the crown
-let blueWins = 0; // Track rounds won for Best of 3 for the blue player
-let redWins = 0; // Track rounds won for Best of 3 for the red player
+let lastWinner = null; // null means "nothing yet". 
+let blueWins = 0; // Integers (numbers) track the score
+let redWins = 0; 
 
-// Player objects: These store all the real-time data for the characters while fighting.
-// They hold positions (x,y), speed, hit points, attack timers, and movement states (dashing, jumping).
+/* =================================================================================
+   JAVASCRIPT OBJECTS EXPLAINED
+   Below is a JavaScript Object. It is created using curly braces { }.
+   Inside the braces are "Key: Value" pairs.
+   Think of an object like a Character Sheet in a video game.
+   Instead of making 15 different variables like bluePlayerHp, bluePlayerSpeed, etc.,
+   we group them all into one clean "Object" called bluePlayer.
+   To access the health, we just type: bluePlayer.hp
+   To change the x position, we type: bluePlayer.x = 100
+   ================================================================================= */
 let bluePlayer = {
-  id: "blue",
-  x: 0,
-  y: 0,
-  r: 35,
-  speed: 5,
-  cooldown: 0,
-  maxCooldown: 30,
-  hits: 0,
-  ammo: 3,
-  reloadTimer: 0,
-  lastCombatTime: 0,
-  dashTicks: 0,
-  dashVx: 0,
-  dashVy: 0,
-  hasDamagedInDash: false,
+  id: "blue",          // A String (text) to identify which team this is
+  x: 0,                // Current horizontal position on screen
+  y: 0,                // Current vertical position on screen
+  r: 35,               // Radius (size) of the player circle
+  speed: 5,            // How many pixels they move per frame when pressing WASD
+  cooldown: 0,         // Timer to prevent shooting every single frame
+  maxCooldown: 30,     // How long the cooldown lasts
+  hits: 0,             // Number of successful attacks (charges the Super)
+  ammo: 3,             // How many attacks they have ready
+  reloadTimer: 0,      // Timer tracking how close they are to getting 1 ammo back
+  lastCombatTime: 0,   // Timestamp of their last fight to calculate auto-healing
+  dashTicks: 0,        // How long their dash (like Mortis) will last
+  dashVx: 0,           // Dash Velocity X (horizontal movement speed during dash)
+  dashVy: 0,           // Dash Velocity Y (vertical movement speed during dash)
+  hasDamagedInDash: false, // A boolean to ensure Mortis only damages an enemy ONCE per dash
 };
+
+// Red player is structurally identical to Blue Player, just a separate Object!
 let redPlayer = {
   id: "red",
   x: 0,
@@ -93,17 +127,19 @@ let redPlayer = {
 };
 
 // Game Object Arrays: These store things that exist temporarily in the world
-let walls = []; // Rectangles blocking movement and attacks
-let projectiles = []; // Bullets flying across the screen
+let walls = []; // Will hold objects like {x: 10, y: 10, w: 50, h: 50} for collision
+let projectiles = []; // Will hold moving bullets
 let smashEffects = []; // Array for Frank's attack visuals (triangle shapes)
 let bombs = []; // Array for Piper and Dynamike's delayed explosives
 let puddles = []; // Array for Barley's area-of-effect fire puddles
 let dougSplashes = []; // Array for Doug's splash heal/damage visual
 
 /* --- Brawler Stats Dictionary ---
-           This is a lookup table. Instead of hardcoding stats everywhere, we store them here.
-           When a player picks a brawler, the game looks up their specific stats (health, damage, reload speed, etc.)
-           from this list to set up their character correctly. */
+   This is an Object containing OTHER Objects! It's called a "Lookup Dictionary".
+   Instead of coding Shelly's damage everywhere, we just look it up.
+   If we want to know Frank's HP, we write: BRAWLER_STATS["Frank"].hp
+   This makes balancing the game incredibly easy. You just change the number here,
+   and the entire game updates automatically! */
 const BRAWLER_STATS = {
   Frank: {
     hp: 13400,
@@ -114,8 +150,8 @@ const BRAWLER_STATS = {
     superProjectiles: 1,
     range: 160,
     superRange: 250,
-    reloadTime: 48,
-  }, // 0.8s
+    reloadTime: 48, // Math note: Our game runs at 60 frames per second. 48 frames / 60 = 0.8 seconds to reload!
+  }, 
   Piper: {
     hp: 4800,
     damage: 3400,
@@ -125,7 +161,7 @@ const BRAWLER_STATS = {
     superProjectiles: 4,
     range: 700,
     reloadTime: 138,
-  }, // 2.3s
+  }, 
   Dynamike: {
     hp: 5600,
     damage: 1600,
@@ -135,7 +171,7 @@ const BRAWLER_STATS = {
     superProjectiles: 1,
     range: 350,
     reloadTime: 102,
-  }, // 1.7s
+  }, 
   Mortis: {
     hp: 7600,
     damage: 1880,
@@ -145,7 +181,7 @@ const BRAWLER_STATS = {
     superProjectiles: 1,
     range: 200,
     reloadTime: 144,
-  }, // 2.4s
+  }, 
   Doug: {
     hp: 10000,
     damage: 2400,
@@ -155,7 +191,7 @@ const BRAWLER_STATS = {
     superProjectiles: 1,
     range: 250,
     reloadTime: 90,
-  }, // 1.5s
+  }, 
   Barley: {
     hp: 4800,
     damage: 1600,
@@ -165,7 +201,7 @@ const BRAWLER_STATS = {
     superProjectiles: 5,
     range: 450,
     reloadTime: 120,
-  }, // 2.0s
+  }, 
   Leon: {
     hp: 6400,
     damage: 960,
@@ -175,7 +211,7 @@ const BRAWLER_STATS = {
     superProjectiles: 0,
     range: 500,
     reloadTime: 114,
-  }, // 1.9s
+  }, 
   Shelly: {
     hp: 7400,
     damage: 600,
@@ -185,7 +221,7 @@ const BRAWLER_STATS = {
     superProjectiles: 9,
     range: 400,
     reloadTime: 90,
-  }, // 1.5s
+  }, 
   Colt: {
     hp: 5600,
     damage: 720,
@@ -195,7 +231,7 @@ const BRAWLER_STATS = {
     superProjectiles: 12,
     range: 550,
     reloadTime: 102,
-  }, // 1.7s
+  }, 
   Edgar: {
     hp: 6600,
     damage: 1080,
@@ -205,41 +241,45 @@ const BRAWLER_STATS = {
     superProjectiles: 0,
     range: 150,
     reloadTime: 42,
-  }, // 0.7s
+  }, 
 };
 
 /* =================================================================================
-           CLASSES (Object Oriented Programming)
-           Classes are blueprints for creating complex objects that have their own data 
-           and functions (methods) bundled together.
-           ================================================================================= */
+   CLASSES (Object Oriented Programming)
+   While an "Object" (like bluePlayer) is a single, specific item, a "Class" is a BLUEPRINT.
+   We want to make 3 menu buttons. Instead of writing the code for a button 3 times,
+   we write a "Class" (blueprint) once. 
+   Then we just say `new Button(...)` and it builds a fresh object using this blueprint!
+   ================================================================================= */
 
 // --- Custom Button Class ---
-// Used to create the PLAY button and BRAWLER menu buttons
 class Button {
-  // constructor sets up the initial state of the button when created
+  // 'constructor' is the factory machine. When we say `new Button(arguments)`,
+  // the constructor takes those arguments and sets up the new button's internal properties.
+  // We use `this.property` to say "THIS specific button's property".
   constructor(id, text, x, y, w, h, baseColor, textColor) {
     this.id = id;
     this.text = text;
     this.x = x;
     this.y = y;
-    this.w = w;
-    this.h = h;
+    this.w = w; // Width
+    this.h = h; // Height
     this.baseColor = color(baseColor);
-    // Calculate a slightly darker color for the 3D shadow effect
+    // Here we calculate a slightly darker version of the base color to act as a 3D shadow underneath the button!
     this.shadowColor = color(
       red(this.baseColor) * 0.7,
       green(this.baseColor) * 0.7,
       blue(this.baseColor) * 0.7
     );
     this.textColor = color(textColor);
-    this.hover = false;
-    this.scale = 1.0; // Used for the popping animation when hovered
+    this.hover = false; // Is the mouse currently over this button?
+    this.scale = 1.0; // The visual size multiplier (used for the pop-out animation)
   }
 
-  // Checks if the mouse is hovering over the button to trigger animations
+  // A Method (a function that belongs to a class).
+  // update() checks if the mouse coordinates (mx, my) are inside the button's rectangle.
   update(mx, my) {
-    // Simple rectangular collision detection (bounding box)
+    // This is a "Bounding Box" collision check. It verifies the mouse is between the left/right and top/bottom edges.
     if (
       mx > this.x - this.w / 2 &&
       mx < this.x + this.w / 2 &&
@@ -247,26 +287,26 @@ class Button {
       my < this.y + this.h / 2
     ) {
       this.hover = true;
-      // lerp smooths the transition from size 1.0 to 1.1 (grow effect)
+      // 'lerp' stands for Linear Interpolation. It smoothly transitions a number from point A to point B over time.
+      // Here, it smoothly grows the button from size 1.0 to 1.1 when hovered.
       this.scale = lerp(this.scale, 1.1, 0.2);
     } else {
       this.hover = false;
-      // lerp smooths the transition back to normal size
-      this.scale = lerp(this.scale, 1.0, 0.2);
+      this.scale = lerp(this.scale, 1.0, 0.2); // Shrink back down if not hovered
     }
   }
 
   // Handles the visual rendering of the button to the canvas
   draw() {
-    push(); // Save current drawing state (colors, transforms)
-    translate(this.x, this.y); // Move origin point to button's location
-    scale(this.scale); // Apply hover scaling
+    push(); // 'push' saves the current drawing settings (like what color paintbrush we are using)
+    translate(this.x, this.y); // 'translate' moves the invisible starting point (0,0) of the canvas to the button's center.
+    scale(this.scale); // Make everything drawn next slightly bigger based on the hover scale
 
     // Draw shadow (bottom layer)
     fill(this.shadowColor);
     noStroke();
     rectMode(CENTER);
-    rect(0, 8, this.w, this.h, 15); // Offset y by 8 pixels for 3D effect
+    rect(0, 8, this.w, this.h, 15); // The '15' makes the corners rounded! We offset Y by 8 to make it look 3D.
 
     // Draw main button top layer
     fill(this.baseColor);
@@ -279,25 +319,25 @@ class Button {
     noStroke();
     textAlign(CENTER, CENTER);
     textSize(this.h * 0.45);
-    text(this.text, 0, -this.h * 0.05);
-    pop(); // Restore previous drawing state
+    text(this.text, 0, -this.h * 0.05); // Offset text slightly up so it's centered perfectly on the 3D button
+    pop(); // 'pop' throws away the settings we changed, preventing them from bleeding into other drawings.
   }
 
-  // Returns true if the user clicks while hovering over the button
+  // Returns true or false. We call this when the user physically clicks the mouse.
   isClicked(mx, my) {
-    return this.hover;
+    return this.hover; // If we were hovering when we clicked, then yes, it was clicked!
   }
 }
 
 // --- Player Class (Lobby visuals only) ---
-// This is purely for displaying the big character models in the lobby, not for combat.
+// This is purely for displaying the large character models floating on the lobby screen.
 class Player {
   constructor(id, name, offsetX, col) {
-    this.id = id; // 'blue' or 'red' side
-    this.name = name; // Name of brawler to know which image to load
-    this.offsetX = offsetX; // Distance from center of screen
+    this.id = id; 
+    this.name = name; 
+    this.offsetX = offsetX; 
     this.color = color(col);
-    this.yOffset = 0; // Used for breathing animation
+    this.yOffset = 0; 
   }
 
   draw() {
@@ -305,25 +345,26 @@ class Player {
     let py = height / 2 + 50 + this.yOffset;
 
     push();
-    // Draw the dark oval shadow under the character
+    // Draw the dark oval shadow on the ground under the character
     fill(0, 0, 0, 100);
     noStroke();
     ellipse(px, height / 2 + 130, 100, 30);
 
-    // Find the loaded image from our dictionary and draw it
+    // Find the loaded image from our brawlerImages dictionary
     let img = brawlerImages[this.name];
-    if (img) {
-      let aspect = img.width / img.height; // Keep image proportions correct
-      let drawH = 160;
-      let drawW = drawH * aspect;
+    if (img) { // Safety check: Did the image actually load successfully from the internet?
+      let aspect = img.width / img.height; // Figure out the original rectangle shape (aspect ratio)
+      let drawH = 160; // We force the height to be 160 pixels
+      let drawW = drawH * aspect; // And calculate the width based on the aspect ratio so it doesn't look stretched!
       imageMode(CENTER);
       image(img, px, py, drawW, drawH);
     }
 
-    // Draw the character nameplate below them
-    fill(0, 150);
+    // Draw the character nameplate
+    fill(0, 150); // Semi-transparent black
     noStroke();
     rectMode(CORNER);
+    // Use textWidth() to make the background box dynamically wrap around short or long names perfectly!
     rect(
       px - textWidth(this.name) / 2 - 10,
       py - 115,
@@ -340,26 +381,28 @@ class Player {
     // If this player won the last game, draw a golden crown over their head
     if (lastWinner === this.id) {
       push();
-      fill("#f1c40f"); // Gold color
+      fill("#f1c40f"); // Hex code for gold
       stroke(0);
       strokeWeight(2);
-      // beginShape and vertex draw a custom polygon point-by-point
+      
+      // beginShape() and vertex() allow us to draw custom polygons by defining the points manually, like connect-the-dots!
       beginShape();
-      vertex(px - 20, py - 130); // bottom left
+      vertex(px - 20, py - 130); // bottom left corner
       vertex(px - 25, py - 160); // top left spike
-      vertex(px - 10, py - 145); // inner left
-      vertex(px, py - 165); // top middle spike
-      vertex(px + 10, py - 145); // inner right
+      vertex(px - 10, py - 145); // inner left dip
+      vertex(px, py - 165);      // top middle spike
+      vertex(px + 10, py - 145); // inner right dip
       vertex(px + 25, py - 160); // top right spike
-      vertex(px + 20, py - 130); // bottom right
-      endShape(CLOSE);
+      vertex(px + 20, py - 130); // bottom right corner
+      endShape(CLOSE); // CLOSE tells the code to draw a final line connecting the last point back to the first point.
       pop();
     }
   }
 
   // Runs every frame to update animation logic
   update() {
-    // Using sin() creates an infinite, smooth up-and-down wave perfect for "breathing"
+    // Math.sin() creates an infinite, smooth up-and-down wave. 
+    // It oscillates between -1 and 1 over time. By multiplying it by 5, the character floats up and down 5 pixels!
     this.yOffset = sin(frameCount * 0.05 + this.offsetX) * 5;
   }
 }
@@ -369,16 +412,23 @@ class Player {
            These functions are automatically called by the p5.js library to run the game.
            ================================================================================= */
 
-// preload() runs before the game starts. It forces the browser to load all heavy assets
-// (like images) first so they don't pop-in halfway through playing.
+// preload() runs before the game starts. It forces the browser to download all heavy assets
+// (like images and fonts) FIRST, so they don't awkwardly pop-in halfway through playing.
 function preload() {
-  // Helper function to safely load images and store them in our dictionary
-  Lilita = loadFont('LilitaOne.ttf'); 
+  
+  // Load our local font file! 
+  // IMPORTANT: The online preview environment blocks loading local files from your hard drive, 
+  // so I commented this out to prevent the Invalid URL error. 
+  // WHEN YOU RUN THIS LOCALLY ON YOUR COMPUTER: Remove the '//' from the start of the line below!
+  // customFont = loadFont('LilitaOne.ttf');
+  
+  // This is a custom helper function. It attempts to load an image, and if the internet fails,
+  // it logs a warning instead of crashing the entire game!
   const safeLoadImage = (url, name) => {
     loadImage(
       url,
       (img) => {
-        brawlerImages[name] = img;
+        brawlerImages[name] = img; // If success, store it in the dictionary
       },
       (err) => {
         console.warn(`Failed to load image for ${name}`);
@@ -386,167 +436,120 @@ function preload() {
     );
   };
 
-  // Loading all character models and weapon images from the internet
-  safeLoadImage(
-    "https://static.wikia.nocookie.net/brawlstars/images/4/4d/Doug_Skin-Default.png/revision/latest?cb=20260326184421",
-    "Doug"
-  );
-  safeLoadImage(
-    "https://static.wikia.nocookie.net/brawlstars/images/3/33/Leon_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251010150951",
-    "Leon"
-  );
-  safeLoadImage(
-    "https://static.wikia.nocookie.net/brawlstars/images/5/5e/Shelly_Skin-Default.png/revision/latest/scale-to-width-down/249?cb=20251013023733",
-    "Shelly"
-  );
-  safeLoadImage(
-    "https://static.wikia.nocookie.net/brawlstars/images/5/55/Frank_Skin-Default.png/revision/latest?cb=20250208034133",
-    "Frank"
-  );
-  safeLoadImage(
-    "https://media.tenor.com/fy_w5CJQ5R0AAAAj/brawl-stars-brawl-stars-meme.gif",
-    "Edgar"
-  );
-  safeLoadImage(
-    "https://static.wikia.nocookie.net/vsbattles/images/5/59/Barley_Skin-Default.webp/revision/latest?cb=20230714220010",
-    "Barley"
-  );
-  safeLoadImage(
-    "https://static.wikia.nocookie.net/brawlstars/images/6/6e/Dynamike_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20250913230712",
-    "Dynamike"
-  );
-  safeLoadImage(
-    "https://static.wikia.nocookie.net/brawlstars/images/8/8a/Colt_Skin-Default.png/revision/latest?cb=20251013020251",
-    "Colt"
-  );
-  safeLoadImage(
-    "https://static.wikia.nocookie.net/brawlstars/images/b/b2/Mortis_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251020175238",
-    "Mortis"
-  );
-  safeLoadImage(
-    "https://static.wikia.nocookie.net/brawlstars/images/5/5d/Piper_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251018180616",
-    "Piper"
-  );
-  safeLoadImage(
-    "https://preview.redd.it/i-made-a-model-of-shellys-shotgun-what-do-you-think-v0-fv5pb1m3vkc21.png?width=640&crop=smart&auto=webp&s=b9d0a1ca7ebea77a9410adbb8b2cfd0a66a58d2d",
-    "ShellyWeapon"
-  );
+  // Loading all character models and weapon images using web links
+  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/4/4d/Doug_Skin-Default.png/revision/latest?cb=20260326184421", "Doug");
+  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/3/33/Leon_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251010150951", "Leon");
+  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/5/5e/Shelly_Skin-Default.png/revision/latest/scale-to-width-down/249?cb=20251013023733", "Shelly");
+  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/5/55/Frank_Skin-Default.png/revision/latest?cb=20250208034133", "Frank");
+  safeLoadImage("https://media.tenor.com/fy_w5CJQ5R0AAAAj/brawl-stars-brawl-stars-meme.gif", "Edgar");
+  safeLoadImage("https://static.wikia.nocookie.net/vsbattles/images/5/59/Barley_Skin-Default.webp/revision/latest?cb=20230714220010", "Barley");
+  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/6/6e/Dynamike_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20250913230712", "Dynamike");
+  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/8/8a/Colt_Skin-Default.png/revision/latest?cb=20251013020251", "Colt");
+  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/b/b2/Mortis_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251020175238", "Mortis");
+  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/5/5d/Piper_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251018180616", "Piper");
+  safeLoadImage("https://preview.redd.it/i-made-a-model-of-shellys-shotgun-what-do-you-think-v0-fv5pb1m3vkc21.png?width=640&crop=smart&auto=webp&s=b9d0a1ca7ebea77a9410adbb8b2cfd0a66a58d2d", "ShellyWeapon");
 }
 
-// setup() runs once exactly after preload finishes. It configures the canvas and audio.
+// setup() runs ONCE exactly after preload finishes. It configures the canvas and audio logic.
 function setup() {
-  // Make the drawing area take up the full browser window
+  // Make the drawing area take up the full browser window (Responsive design!)
   createCanvas(windowWidth, windowHeight);
-  textFont(Lilita);
+  
+  // Apply the font we loaded from Google Fonts (or change to customFont if you enabled it in preload!)
+  textFont('Lilita One'); 
 
   // --- Cache the Lobby Background to FIX LAG ---
-  // createGraphics creates a hidden off-screen canvas. We draw the heavy neon rings to this ONCE,
-  // then we just paste that image every frame instead of redrawing 100 circles, saving massive CPU power.
+  // createGraphics() creates an invisible, off-screen piece of paper. 
+  // We draw the heavy neon rings onto this off-screen paper ONCE.
+  // Then, in our draw loop, we just paste that flat image. This saves the computer
+  // from having to do hundreds of math calculations 60 times a second!
   bgGraphics = createGraphics(windowWidth, windowHeight);
   renderStaticBackground();
 
   // --- Load the Audio ---
-  // Initialize HTML5 Audio objects for background music
+  // Using HTML5 Audio objects to manage our mp3 files
   lobbyMusic = new Audio("https://files.catbox.moe/re03vh.mp3");
-  lobbyMusic.loop = true; // Make it loop forever
-  lobbyMusic.volume = 0.4; // 40% volume so it isn't too loud
+  lobbyMusic.loop = true; 
+  lobbyMusic.volume = 0.4; 
 
-  // Load Game Music
   gameMusic = new Audio("https://files.catbox.moe/pswebv.mp3");
   gameMusic.loop = true;
   gameMusic.volume = 0.4;
 
-  // Setup the initial UI positions
+  // Setup the initial User Interface (UI) buttons and models
   initScene();
 }
 
 /* =================================================================================
            GAME INITIALIZATION LOGIC
-           These functions reset specific parts of the game (Lobby, Map, Stats) so we don't
-           have to refresh the webpage to play again.
+           These functions reset specific parts of the game (Lobby, Map, Stats).
+           We use functions for this so that when a match ends, we can just call them
+           again to reset the board without forcing the user to refresh the web page!
            ================================================================================= */
 
 // Sets up the Lobby UI (Character models and Menu Buttons)
 function initScene() {
-  buttons = [];
-  players = [];
-  // Create two initial players defaulting to Shelly
+  buttons = []; // Clear any old buttons
+  players = []; // Clear any old models
+  
+  // Create two initial players defaulting to Shelly. 
+  // We push them into the array using our `new Player` blueprint (Class) from earlier!
   players.push(new Player("blue", "Shelly", -100, "#3498db"));
   players.push(new Player("red", "Shelly", 100, "#e74c3c"));
 
-  // Calculate proportional sizes for the buttons based on screen width
+  // Calculate proportional sizes for the buttons based on screen width.
+  // We use min() so that on huge screens, the button doesn't stretch to be massively distorted.
   let playW = min(width * 0.25, 250);
   let playH = playW * 0.35;
+  
+  // Push the PLAY button into the array
   buttons.push(
-    new Button(
-      "play",
-      "PLAY",
-      width - playW / 2 - 40,
-      height - playH / 2 - 40,
-      playW,
-      playH,
-      "#f1c40f",
-      "#ffffff"
-    )
+    new Button("play", "PLAY", width - playW / 2 - 40, height - playH / 2 - 40, playW, playH, "#f1c40f", "#ffffff")
   );
 
   let sideBtnW = min(width * 0.15, 180);
   let sideBtnH = sideBtnW * 0.4;
+  // Push the left and right brawler selection buttons
   buttons.push(
-    new Button(
-      "brawlers_left",
-      "BRAWLERS",
-      sideBtnW / 2 + 20,
-      height / 2,
-      sideBtnW,
-      sideBtnH,
-      "#9b59b6",
-      "#ffffff"
-    )
+    new Button("brawlers_left", "BRAWLERS", sideBtnW / 2 + 20, height / 2, sideBtnW, sideBtnH, "#9b59b6", "#ffffff")
   );
   buttons.push(
-    new Button(
-      "brawlers_right",
-      "BRAWLERS",
-      width - sideBtnW / 2 - 20,
-      height / 2,
-      sideBtnW,
-      sideBtnH,
-      "#2ecc71",
-      "#ffffff"
-    )
+    new Button("brawlers_right", "BRAWLERS", width - sideBtnW / 2 - 20, height / 2, sideBtnW, sideBtnH, "#2ecc71", "#ffffff")
   );
 }
 
 // Builds the physical walls for the combat arena
 function initMap() {
-  walls = []; // Clear old map
-  // Each wall is a simple rectangle {x, y, width, height}
-  // Center block
-  walls.push({ x: width / 2 - 40, y: height / 2 - 100, w: 80, h: 200 });
-  // Top and Bottom horizontal covers
-  walls.push({ x: width / 2 - 150, y: height * 0.15, w: 300, h: 60 });
-  walls.push({ x: width / 2 - 150, y: height * 0.85 - 60, w: 300, h: 60 });
-  // Side L-shapes / blockers
-  walls.push({ x: width * 0.2, y: height * 0.3, w: 60, h: 250 });
-  walls.push({ x: width * 0.8 - 60, y: height * 0.4, w: 60, h: 250 });
+  walls = []; // Empty the array to start fresh
+  
+  // Each wall is pushed as a simple Javascript Object {x, y, w, h}.
+  // We calculate their positions based on `width` and `height` of the screen,
+  // which ensures the map scales perfectly to fit any monitor size!
+  walls.push({ x: width / 2 - 40, y: height / 2 - 100, w: 80, h: 200 }); // Center block
+  walls.push({ x: width / 2 - 150, y: height * 0.15, w: 300, h: 60 });   // Top cover
+  walls.push({ x: width / 2 - 150, y: height * 0.85 - 60, w: 300, h: 60 }); // Bottom cover
+  walls.push({ x: width * 0.2, y: height * 0.3, w: 60, h: 250 });        // Left cover
+  walls.push({ x: width * 0.8 - 60, y: height * 0.4, w: 60, h: 250 });   // Right cover
 }
 
-// Resets the entire match (score, map, character stats) when moving from Lobby to Game
+// Triggered when "PLAY" is clicked. It sets up the logic for a full Best-of-3 Match.
 function initGame() {
-  blueWins = 0; // Reset wins for new match
-  redWins = 0; // Reset wins for new match
-  initMap(); // Build the map only at the start of a match
+  blueWins = 0; // Reset match score
+  redWins = 0; 
+  initMap(); // Build the pristine, unbroken map
 
-  // Grab the currently selected brawler names from the lobby screen
+  // Grab the string (text) of the currently selected brawler from the lobby models
   let p1Name = players[0].name;
   bluePlayer.brawler = p1Name;
-  // Lookup the stats from the dictionary
+  
+  // Here is where the BRAWLER_STATS dictionary shines! 
+  // We set the player's maxHP to whatever the dictionary says it should be.
   bluePlayer.maxHp = BRAWLER_STATS[p1Name].hp;
   bluePlayer.damage = BRAWLER_STATS[p1Name].damage;
   bluePlayer.superDesc = BRAWLER_STATS[p1Name].superDesc;
-  bluePlayer.hits = 0; // Reset super hits only at the start of a full match
+  bluePlayer.hits = 0; // Reset their super charge meter
 
+  // Do the exact same setup for the red player
   let p2Name = players[1].name;
   redPlayer.brawler = p2Name;
   redPlayer.maxHp = BRAWLER_STATS[p2Name].hp;
@@ -554,40 +557,40 @@ function initGame() {
   redPlayer.superDesc = BRAWLER_STATS[p2Name].superDesc;
   redPlayer.hits = 0;
 
-  // Now that stats are loaded, set up the first round of the match
+  // Now that the big match stats are loaded, set up the specific data for Round 1
   startNextRound();
 }
 
 // Resets positions and health between rounds of a Best-of-3 match.
-// It DOES NOT reset the map or the super charge!
+// It DOES NOT reset the map or the super charge, so those persist (carry over) between rounds!
 function startNextRound() {
-  // Clear all active attacks from the previous round
+  // Clear all active attacks from the air from the previous round by emptying the arrays
   projectiles = [];
   smashEffects = [];
   bombs = [];
   puddles = [];
   dougSplashes = [];
 
-  // Reset Blue positions and combat statuses
-  bluePlayer.x = width * 0.1;
-  bluePlayer.y = height / 2;
-  bluePlayer.hp = bluePlayer.maxHp;
+  // Reset Blue properties
+  bluePlayer.x = width * 0.1; // Spawn on left side (10% of screen width)
+  bluePlayer.y = height / 2;  // Spawn in vertical middle
+  bluePlayer.hp = bluePlayer.maxHp; // Heal to full
   bluePlayer.cooldown = 0;
-  bluePlayer.ammo = 3;
+  bluePlayer.ammo = 3;        // Full reload
   bluePlayer.reloadTimer = 0;
   bluePlayer.stunTicks = 0;
   bluePlayer.attackWindup = 0;
   bluePlayer.leonShots = 0;
   bluePlayer.edgarShots = 0;
-  bluePlayer.lastCombatTime = frameCount; // Prevent instant auto-heal
+  bluePlayer.lastCombatTime = frameCount; // Set their last fight time to right now so they don't instantly auto-heal
   bluePlayer.dashTicks = 0;
   bluePlayer.jumpTicks = 0;
   bluePlayer.isInvisible = false;
   bluePlayer.invisTicks = 0;
   bluePlayer.hotdogTicks = 0;
 
-  // Reset Red positions and combat statuses
-  redPlayer.x = width * 0.9;
+  // Reset Red properties
+  redPlayer.x = width * 0.9; // Spawn on right side (90% of screen width)
   redPlayer.y = height / 2;
   redPlayer.hp = redPlayer.maxHp;
   redPlayer.cooldown = 0;
@@ -612,23 +615,28 @@ function startNextRound() {
 
 // Checks if a circular player is colliding with a rectangular wall
 function checkWallCollision(px, py, radius) {
+  // `for...of` loop: This looks at every item inside the `walls` array one at a time.
+  // It temporarily calls the item `w` so we can do math with it.
   for (let w of walls) {
-    // Find closest point on the rectangle's edge to the circle's center point
-    let cx = constrain(px, w.x, w.x + w.w);
+    // Math to find the closest point on the rectangle's edge to the circle's center point.
+    // constrain() forces a number to stay within a minimum and maximum range.
+    let cx = constrain(px, w.x, w.x + w.w); 
     let cy = constrain(py, w.y, w.y + w.h);
-    // Calculate distance squared between closest point and circle center (Pythagorean theorem)
+    
+    // Calculate distance squared between closest point and circle center using the Pythagorean theorem (A^2 + B^2 = C^2)
+    // We compare distance squared against radius squared to save the computer from having to process heavy Square Root math!
     let distSq = (px - cx) * (px - cx) + (py - cy) * (py - cy);
-    // If distance squared is less than radius squared, they are colliding!
     if (distSq < radius * radius) {
-      return true;
+      return true; // We hit a wall!
     }
   }
-  return false;
+  return false; // Loop finished and hit nothing
 }
 
-// Checks if a single point (like a tiny bullet) is inside a rectangular wall
+// Checks if a single tiny point (like a bullet) is inside a rectangular wall
 function checkProjWallCollision(px, py) {
   for (let w of walls) {
+    // Standard bounding box check: Is the point between the Left & Right edges AND Top & Bottom edges?
     if (px >= w.x && px <= w.x + w.w && py >= w.y && py <= w.y + w.h) {
       return true;
     }
@@ -640,20 +648,21 @@ function checkProjWallCollision(px, py) {
 function resolveWallStuck(player) {
   let pRad = player.r / 2;
   for (let w of walls) {
-    // Check if the player's circle overlaps the wall's rectangular hit-box
+    // If the player overlaps the wall rectangle
     if (
       player.x + pRad > w.x &&
       player.x - pRad < w.x + w.w &&
       player.y + pRad > w.y &&
       player.y - pRad < w.y + w.h
     ) {
-      // Find the distances to each of the 4 edges of the wall
+      // Find the absolute distances from the player to each of the 4 edges of the wall
       let distLeft = Math.abs(player.x + pRad - w.x);
       let distRight = Math.abs(player.x - pRad - (w.x + w.w));
       let distTop = Math.abs(player.y + pRad - w.y);
       let distBottom = Math.abs(player.y - pRad - (w.y + w.h));
 
-      // Find the smallest distance and forcibly teleport (push) the player out via that shortest path
+      // Find the smallest (minimum) distance out of those 4 options.
+      // Then, forcibly teleport (push) the player out via that shortest path!
       let minD = Math.min(distLeft, distRight, distTop, distBottom);
       if (minD === distLeft) player.x = w.x - pRad;
       else if (minD === distRight) player.x = w.x + w.w + pRad;
@@ -669,59 +678,61 @@ function resolveWallStuck(player) {
            ================================================================================= */
 
 // This is the master function called whenever a player presses their attack button.
+// It takes 3 arguments: The player who fired (shooter), who they are aiming at (target), and a boolean (isSuper).
 function shootProjectile(shooter, target, isSuper = false) {
   // Basic checks: You can't shoot if stunned or if your attack cooldown isn't finished
-  if (shooter.cooldown > 0 || shooter.stunTicks > 0) return;
+  if (shooter.cooldown > 0 || shooter.stunTicks > 0) return; // 'return' immediately stops the function from running further
 
   // 1. Verify resources before doing ANYTHING
   if (isSuper) {
     let requiredHits = BRAWLER_STATS[shooter.brawler].hitsToSuper;
-    // If trying to super but haven't hit enough times, cancel attack
-    if (shooter.hits < requiredHits) return;
+    if (shooter.hits < requiredHits) return; // Haven't hit enough enemies yet
   } else {
-    // If it's a regular attack, make sure they have ammo
+    // Regular attack: make sure they have at least 1 ammo
     if (shooter.ammo <= 0) return;
   }
 
-  // 2. Consume resources & apply combat states
+  // 2. Consume resources 
   if (isSuper) {
-    shooter.hits = 0; // Spend the super charge
+    shooter.hits = 0; // Spend the super charge back to 0
   } else {
-    shooter.ammo--; // Consume 1 ammo
+    shooter.ammo--; // Subtract 1 from current ammo
   }
 
-  shooter.lastCombatTime = frameCount; // Resets the 3-second auto-heal timer
+  shooter.lastCombatTime = frameCount; // Updates the timestamp to prevent auto-healing during a fight
 
-  // Cancel Leon's invisibility instantly if he attacks (unless he is actively activating his super)
+  // If Leon attacks, he instantly loses his invisibility (unless he is activating his super right now)
   if (!(shooter.brawler === "Leon" && isSuper)) {
     shooter.isInvisible = false;
     shooter.invisTicks = 0;
   }
 
-  // --- Invisibility Auto-Aim Logic ---
+  // --- Auto-Aim Targeting Math ---
   let angle;
   if (target.isInvisible) {
-    // If the enemy is invisible, auto-aim fails and shoots in a completely random direction!
+    // If the enemy is invisible, auto-aim fails and picks a random direction between 0 and 360 degrees (TWO_PI in radians)
     angle = random(TWO_PI);
   } else {
-    // atan2 calculates the correct angle from the shooter to the target
+    // Math.atan2(y, x) is an incredibly useful geometry function.
+    // If you give it the distance between two objects, it calculates the exact angle (in radians) needed to point from one to the other!
     angle = atan2(target.y - shooter.y, target.x - shooter.x);
   }
 
   // ============================================
   // SPECIAL BRAWLER ATTACK LOGIC
-  // Some brawlers don't shoot standard bullets. We handle them here.
+  // Some brawlers don't shoot standard flying bullets. We handle them uniquely here.
   // ============================================
 
   // --- Doug Attack & Super ---
   if (shooter.brawler === "Doug") {
     if (isSuper) {
-      shooter.hotdogTicks = 900; // Super gives hotdog buff for 15 seconds (60fps * 15)
+      shooter.hotdogTicks = 900; // Super gives revive buff for 15 seconds (60 frames per second * 15)
     } else {
-      // Doug heals himself with every attack
+      // Doug's main attack instantly heals himself
       shooter.hp = Math.min(shooter.hp + 480, shooter.maxHp);
+      
       let aoeRadius = BRAWLER_STATS["Doug"].range / 2;
-      // Spawn visual effect
+      // Spawn visual pink circle effect in the dougSplashes array
       dougSplashes.push({
         x: shooter.x,
         y: shooter.y,
@@ -729,28 +740,25 @@ function shootProjectile(shooter, target, isSuper = false) {
         life: 15,
       });
 
-      // Deal damage immediately to anyone inside the radius
-      if (
-        dist(shooter.x, shooter.y, target.x, target.y) <
-        aoeRadius + target.r / 2
-      ) {
+      // Deal Area of Effect (AoE) damage immediately to anyone inside the radius using the dist() function
+      if (dist(shooter.x, shooter.y, target.x, target.y) < aoeRadius + target.r / 2) {
         target.hp -= shooter.damage;
         shooter.hits++;
         target.lastCombatTime = frameCount;
       }
     }
     shooter.cooldown = shooter.maxCooldown;
-    return; // Stop function here, Doug doesn't spawn projectiles
+    return; // Doug doesn't spawn standard projectiles, so stop the function here
   }
 
   // --- Barley Super ---
   if (shooter.brawler === "Barley" && isSuper) {
-    // Calculate the center target location
+    // Calculate where the center puddle should land
     let cx = shooter.x + cos(angle) * BRAWLER_STATS["Barley"].range;
     let cy = shooter.y + sin(angle) * BRAWLER_STATS["Barley"].range;
     let spacing = 60;
 
-    // Array representing a dice 5-dot shape pattern
+    // Array representing a 5-dot shape pattern (like the face of a dice) using X,Y offsets
     let offsets = [
       [0, 0],
       [-spacing, -spacing],
@@ -759,13 +767,14 @@ function shootProjectile(shooter, target, isSuper = false) {
       [spacing, spacing],
     ];
 
-    // Spawn 5 projectiles targeting each offset location
+    // Loop through the offsets and spawn 5 projectiles targeting each specific spot
     for (let off of offsets) {
       let tx = cx + off[0];
       let ty = cy + off[1];
-      let tAngle = atan2(ty - shooter.y, tx - shooter.x);
-      let tDist = dist(shooter.x, shooter.y, tx, ty);
+      let tAngle = atan2(ty - shooter.y, tx - shooter.x); // Calculate angle to offset target
+      let tDist = dist(shooter.x, shooter.y, tx, ty);     // Calculate distance to offset target
 
+      // Push the data packet (Object) into the projectiles array!
       projectiles.push({
         x: shooter.x,
         y: shooter.y,
@@ -773,34 +782,36 @@ function shootProjectile(shooter, target, isSuper = false) {
         startY: shooter.y,
         maxRange: tDist,
         brawlerName: shooter.brawler,
-        vx: cos(tAngle) * 12,
-        vy: sin(tAngle) * 12,
+        vx: cos(tAngle) * 12, // Trigonometry: Calculate horizontal velocity based on angle
+        vy: sin(tAngle) * 12, // Trigonometry: Calculate vertical velocity based on angle
         damage: shooter.damage,
         owner: shooter.id,
-        ignoresWalls: true,
+        ignoresWalls: true, // Barley lobs over walls
         isSuper: true,
         active: true,
       });
     }
     shooter.cooldown = shooter.maxCooldown;
-    return; // Stop here
+    return; 
   }
 
   // --- Leon Super ---
   if (shooter.brawler === "Leon" && isSuper) {
     shooter.isInvisible = true;
-    shooter.invisTicks = 360; // 6 seconds of invisibility
+    shooter.invisTicks = 360; // Set timer to 360 frames (6 seconds)
     shooter.cooldown = shooter.maxCooldown;
-    return; // Stop here, no projectiles spawned
+    return; 
   }
 
   // --- Piper Super ---
   if (shooter.brawler === "Piper" && isSuper) {
-    // Calculate angle AWAY from target by adding PI (180 degrees)
+    // To jump AWAY from the target, we take the target angle and add PI.
+    // (In radians, PI represents half a circle or 180 degrees!)
     let jumpAngle = angle + PI;
-    shooter.jumpTicks = 45; // Jump lasts 45 frames (0.75 seconds)
-    let jumpDist = 350;
-    // Calculate velocity to travel jumpDist in 45 frames
+    shooter.jumpTicks = 45; // Jump animation lasts 45 frames 
+    let jumpDist = 350;     // Total distance she travels
+
+    // Calculate how fast she must move per frame to travel 350 pixels in 45 frames
     shooter.jumpVx = cos(jumpAngle) * (jumpDist / 45);
     shooter.jumpVy = sin(jumpAngle) * (jumpDist / 45);
 
@@ -815,8 +826,8 @@ function shootProjectile(shooter, target, isSuper = false) {
       bombs.push({
         x: shooter.x + off[0],
         y: shooter.y + off[1],
-        ticks: 60, // 1 second fuse
-        damage: 1800, // Piper grenade damage
+        ticks: 60, // Fuse timer is 60 frames (1 second)
+        damage: 1800, 
         owner: shooter.id,
       });
     }
@@ -828,7 +839,11 @@ function shootProjectile(shooter, target, isSuper = false) {
   if (shooter.brawler === "Edgar" && isSuper) {
     let jumpAngle = angle;
     shooter.jumpTicks = 45;
-    // Jump towards enemy. Capped at 400 distance. If enemy is invisible, jump blind distance (300).
+    
+    // Jump TOWARDS enemy. Capped at max 400 distance. 
+    // Using Math.min ensures he doesn't overshoot if the enemy is really close.
+    // A ternary operator `Condition ? TrueOutput : FalseOutput` is used here.
+    // If enemy is invisible, he blindly jumps 300 pixels forward instead of tracking them.
     let jumpDist = target.isInvisible
       ? 300
       : Math.min(400, dist(shooter.x, shooter.y, target.x, target.y));
@@ -841,16 +856,16 @@ function shootProjectile(shooter, target, isSuper = false) {
   // --- Mortis Dash & Super ---
   if (shooter.brawler === "Mortis") {
     if (isSuper) {
-      // Fire a wide shot that heals Mortis when it hits
+      // Fire a wide purple bat swarm that heals Mortis when it hits
       projectiles.push({
         x: shooter.x,
         y: shooter.y,
         startX: shooter.x,
         startY: shooter.y,
-        maxRange: BRAWLER_STATS["Mortis"].range * 2, // Longer range for super
+        maxRange: BRAWLER_STATS["Mortis"].range * 2, // Doubles range for super
         brawlerName: shooter.brawler,
         vx: cos(angle) * 15,
-        vy: sin(angle) * 15, // Moves faster (15)
+        vy: sin(angle) * 15, 
         damage: 1800,
         owner: shooter.id,
         ignoresWalls: true,
@@ -859,39 +874,40 @@ function shootProjectile(shooter, target, isSuper = false) {
       });
       shooter.cooldown = shooter.maxCooldown;
     } else {
-      // Standard Dash - Calculate velocity to cover range in 12 frames
-      shooter.dashTicks = 12;
-      let dashSpeed = BRAWLER_STATS["Mortis"].range / 12;
+      // Standard Dash: Turn his body into the projectile!
+      shooter.dashTicks = 12; // Dash lasts 12 frames
+      let dashSpeed = BRAWLER_STATS["Mortis"].range / 12; // Speed required to cover range
       shooter.dashVx = cos(angle) * dashSpeed;
       shooter.dashVy = sin(angle) * dashSpeed;
-      shooter.hasDamagedInDash = false;
+      shooter.hasDamagedInDash = false; // Reset to ensure he only damages enemies ONCE during this motion
       shooter.cooldown = shooter.maxCooldown;
     }
-    return; // Stop here
+    return; 
   }
 
   // --- Frank Windup ---
   if (shooter.brawler === "Frank") {
-    // Animation is shorter the less health he has left
+    // Frank's mechanic: His attack animation gets faster the lower his health is!
     let hpRatio = Math.max(0.1, shooter.hp / shooter.maxHp);
-    shooter.attackWindup = floor(10 + 40 * hpRatio); // Windup takes between 10 to 50 frames
+    // Windup takes between 10 to 50 frames depending on the hpRatio calculation
+    shooter.attackWindup = floor(10 + 40 * hpRatio); 
     shooter.windupAngle = angle;
     shooter.windupIsSuper = isSuper;
-    shooter.cooldown = shooter.maxCooldown + shooter.attackWindup; // Add windup time to cooldown
-    return; // Stop here, attack executes later
+    shooter.cooldown = shooter.maxCooldown + shooter.attackWindup; // Add windup time to cooldown so he can't spam it
+    return; // Stop here, attack executes later in the draw loop
   }
 
   // --- Leon Sequential Firing ---
   if (shooter.brawler === "Leon") {
     let projCount = BRAWLER_STATS["Leon"].projectiles;
     if (isSuper) projCount *= 2;
-    // Instead of firing all at once, tell Leon he has X shots queued up
+    // Instead of firing all 4 blades at once, tell Leon he has X shots queued up to be fired over time
     shooter.leonShots = projCount;
-    shooter.leonTimer = 0; // Shoot first one immediately
+    shooter.leonTimer = 0; // Fire first one immediately
     shooter.leonAngle = angle;
     shooter.leonIsSuper = isSuper;
     shooter.cooldown = shooter.maxCooldown;
-    return; // Stop here, projectiles spawn over time in drawGame loop
+    return; 
   }
 
   // --- Edgar Sequential Firing ---
@@ -906,9 +922,10 @@ function shootProjectile(shooter, target, isSuper = false) {
 
   // ============================================
   // STANDARD PROJECTILE SPAWNING LOGIC
+  // If the brawler wasn't caught by the special cases above, they shoot normal bullets here.
   // ============================================
 
-  // Determine if the attack type ignores walls
+  // Determine if the attack type ignores walls (Using a Javascript array .includes() method)
   let ignoresWalls =
     ["Doug", "Dynamike", "Barley"].includes(shooter.brawler) ||
     (shooter.brawler === "Colt" && isSuper);
@@ -919,38 +936,39 @@ function shootProjectile(shooter, target, isSuper = false) {
     : BRAWLER_STATS[shooter.brawler].projectiles;
 
   // We use a standard "for" loop to fire multiple projectiles at once!
+  // It starts with i=0, runs the code block, adds 1 to i (i++), and repeats until i hits projCount.
   for (let i = 0; i < projCount; i++) {
     let finalAngle = angle;
     let speed = 12;
     let spawnX = shooter.x;
     let spawnY = shooter.y;
 
-    // Modifiers for multi-projectile attacks (spreads, lines, etc)
+    // Mathematical Modifiers for multi-projectile attacks (spreads, lines, etc)
     if (projCount > 1) {
       if (shooter.brawler === "Colt") {
-        // Colt fires in a straight line burst. By decreasing the speed slightly for each bullet,
-        // they naturally trail behind each other creating a burst effect.
+        // Colt fires in a straight line burst. By decreasing the speed slightly for each bullet generated in the loop,
+        // they naturally trail behind each other creating a stream effect!
         speed = 12 - i * (isSuper ? 1.0 : 1.5);
       } else if (shooter.brawler === "Dynamike" && !isSuper) {
-        // Dynamike sticks travel side-by-side, offset perpendicularly from the angle
-        let perpAngle = angle + PI / 2;
-        let offset = i === 0 ? -12 : 12;
+        // Dynamike sticks travel side-by-side, offset perpendicularly from the aiming angle
+        let perpAngle = angle + PI / 2; // Add 90 degrees (PI/2) to find the perpendicular angle
+        let offset = i === 0 ? -12 : 12; // Shift first stick left, second stick right
         spawnX += cos(perpAngle) * offset;
         spawnY += sin(perpAngle) * offset;
       } else {
         // Wide shotgun spread (Shelly)
-        let spreadAmount = isSuper ? 1.0 : 0.5; // Wider spread (in radians) for super
-        let startAngle = angle - spreadAmount / 2;
-        let angleStep = spreadAmount / (projCount - 1);
-        finalAngle = startAngle + i * angleStep;
+        let spreadAmount = isSuper ? 1.0 : 0.5; // Spread angle width (in radians) 
+        let startAngle = angle - spreadAmount / 2; // Calculate leftmost angle to start firing from
+        let angleStep = spreadAmount / (projCount - 1); // Calculate distance between each bullet
+        finalAngle = startAngle + i * angleStep; // Apply offset for this specific bullet
       }
     }
 
-    // Actually create the projectile object and push it to the active array
+    // Actually create the projectile object and push it to the active array so the engine draws it
     projectiles.push({
       x: spawnX,
       y: spawnY,
-      startX: spawnX, // Track origin to calculate max range limits
+      startX: spawnX, // Track origin point so we can delete the bullet if it goes past its max range
       startY: spawnY,
       maxRange: BRAWLER_STATS[shooter.brawler].range,
       brawlerName: shooter.brawler,
@@ -960,7 +978,7 @@ function shootProjectile(shooter, target, isSuper = false) {
       owner: shooter.id,
       ignoresWalls: ignoresWalls,
       isSuper: isSuper,
-      active: true, // Setting to false later marks it for deletion
+      active: true, // Setting to false later marks it for deletion by the engine
     });
   }
 
@@ -969,12 +987,12 @@ function shootProjectile(shooter, target, isSuper = false) {
 
 // --- Additional Combat Helper Functions ---
 
-// Executes Frank's attack after his windup timer finishes
+// Executes Frank's attack after his windup timer hits 0
 function executeFrankSmash(frank, enemy) {
   let range = frank.windupIsSuper
     ? BRAWLER_STATS["Frank"].superRange
     : BRAWLER_STATS["Frank"].range;
-  let spreadAngle = PI / 3; // 60-degree wide triangle cone
+  let spreadAngle = PI / 3; // Defines a 60-degree wide triangle cone area in front of him
 
   // Spawn visual triangle effect
   smashEffects.push({
@@ -988,15 +1006,16 @@ function executeFrankSmash(frank, enemy) {
   });
 
   // Complex Math: Check if enemy is inside the triangle cone
+  // 1. Check if they are within distance
   let distToEnemy = dist(frank.x, frank.y, enemy.x, enemy.y);
   let eRad = enemy.r / 2;
 
   if (distToEnemy - eRad <= range) {
-    // Determine angle to enemy relative to where Frank aimed
+    // 2. Determine exact angle to enemy relative to where Frank aimed
     let angleToEnemy = atan2(enemy.y - frank.y, enemy.x - frank.x);
     let diff = angleToEnemy - frank.windupAngle;
 
-    // Normalize angle to handle wrapping around PI/-PI (Math fixes)
+    // Normalize angle to handle math wrapping around a circle (e.g. 359 degrees and 1 degree are right next to each other)
     while (diff > PI) diff -= TWO_PI;
     while (diff < -PI) diff += TWO_PI;
 
@@ -1007,14 +1026,16 @@ function executeFrankSmash(frank, enemy) {
       frank.lastCombatTime = frameCount;
       enemy.lastCombatTime = frameCount;
       if (frank.windupIsSuper) {
-        enemy.stunTicks = floor(2.48 * 60); // Apply 2.48s Stun duration
+        enemy.stunTicks = floor(2.48 * 60); // Apply 2.48s Stun duration by multiplying seconds by 60 frames
       }
     }
   }
 
   // Frank Super Wall Breaking Logic
   if (frank.windupIsSuper) {
-    // Loop backwards through walls because we might delete some (splicing)
+    // Loop backwards through walls array. 
+    // We loop backwards when we might DELETE (splice) items because if we went forwards,
+    // the array items would shift left and we would accidentally skip checking the next wall!
     for (let i = walls.length - 1; i >= 0; i--) {
       let w = walls[i];
       // Find approximate center of the wall to test against the triangle cone
@@ -1029,14 +1050,14 @@ function executeFrankSmash(frank, enemy) {
         while (diff < -PI) diff += TWO_PI;
 
         if (abs(diff) <= spreadAngle / 2) {
-          walls.splice(i, 1); // Delete the wall array item (Breaks the wall)
+          walls.splice(i, 1); // Delete the wall array item (Breaks the wall permanently)
         }
       }
     }
   }
 }
 
-// Spawns one of Leon's queued blades and offsets the angle so they curve slightly
+// Spawns one of Leon's queued blades and offsets the angle so they curve slightly to the side
 function fireLeonBlade(leon) {
   let totalShots =
     BRAWLER_STATS["Leon"].projectiles * (leon.leonIsSuper ? 2 : 1);
@@ -1089,16 +1110,16 @@ function fireEdgarPunch(edgar) {
 
 // This function draws the specific weapon for each brawler.
 function drawWeapon(player, angle) {
-  // push() saves our current drawing settings (like colors and coordinates)
+  // push() saves our current drawing settings (like colors and coordinates) so we don't mess up the rest of the game
   push();
 
-  // By translating to the player's position, we make the player (0,0).
-  // Then, rotating by the angle points the canvas itself towards the enemy!
-  // This means we just draw the weapon facing "right", and math handles pointing it correctly.
+  // By translating to the player's position, we treat the player as point (0,0) on a graph.
+  // Then, rotate() turns the entire invisible grid so "Right" is pointing directly at the enemy!
+  // This means we just draw the weapon facing right, and the computer does the hard work pointing it.
   translate(player.x, player.y);
   rotate(angle);
 
-  // A 'switch' statement acts like multiple 'if' statements to check the brawler name
+  // A 'switch' statement acts like multiple 'if/else' statements to check the brawler name neatly
   switch (player.brawler) {
     case "Shelly":
       let wImg = brawlerImages["ShellyWeapon"];
@@ -1107,13 +1128,14 @@ function drawWeapon(player, angle) {
         let drawH = 25;
         let drawW = drawH * aspect;
         push();
-        translate(20, 0); // Move weapon out slightly from body
+        translate(20, 0); // Move weapon out slightly from body center
 
-        // The loaded image barrel naturally faces left, so flip horizontally (scale x by -1)
-        // to make it face right
+        // scale(-1, 1) flips an image horizontally like a mirror. 
+        // We do this because the raw image file of Shelly's shotgun naturally faces left!
         scale(-1, 1);
 
-        // If player is aiming to the left side of the screen, flip vertically so the gun isn't upside down
+        // If player is aiming to the left side of the screen, the entire grid is rotated past 180 degrees, 
+        // making the gun appear upside down. This check flips it vertically to fix it!
         if (cos(angle) < 0) {
           scale(1, -1);
         }
@@ -1128,19 +1150,19 @@ function drawWeapon(player, angle) {
       }
       break;
     case "Colt":
-      // Dual Pistols
+      // Dual Pistols drawn using basic rectangles
       fill(100);
       rect(15, -12, 15, 6); // Left pistol
       rect(15, 6, 15, 6); // Right pistol
       break;
     case "Leon":
-      // Shurikens
+      // Shurikens created by crossing two rectangles
       fill("yellow");
       rect(20, -2, 10, 4);
       rect(23, -5, 4, 10);
       break;
     case "Piper":
-      // Sniper Umbrella (Arc)
+      // Sniper Umbrella (Line and a half-circle Arc)
       stroke("#00a8ff");
       strokeWeight(4);
       line(10, 0, 40, 0);
@@ -1156,7 +1178,7 @@ function drawWeapon(player, angle) {
       rect(40, -10, 10, 20);
       break;
     case "Dynamike":
-      // 2 Dynamite sticks
+      // 2 Dynamite sticks with little white fuses
       fill("red");
       rect(15, -12, 15, 8);
       rect(15, 4, 15, 8);
@@ -1167,7 +1189,7 @@ function drawWeapon(player, angle) {
     case "Frank":
       // Hammer
       if (player.attackWindup > 0) {
-        rotate(-PI / 4); // Visually pull hammer back during his windup delay
+        rotate(-PI / 4); // Visually tilts hammer backwards during his windup delay
       }
       fill("#8B4513");
       rect(10, -5, 40, 10);
@@ -1175,7 +1197,7 @@ function drawWeapon(player, angle) {
       rect(45, -20, 25, 40);
       break;
     case "Edgar":
-      // Scarf stripes (Using lines)
+      // Scarf stripes (Using lines drawn on top of each other)
       stroke(0);
       strokeWeight(6);
       line(0, -15, -20, -25);
@@ -1194,12 +1216,12 @@ function drawWeapon(player, angle) {
     case "Doug":
       // Mustard Bottle
       fill("#d4af37");
-      rect(15, -8, 20, 16, 5);
+      rect(15, -8, 20, 16, 5); // The 5 makes the rectangle corners rounded
       fill("red");
       rect(35, -2, 6, 4);
       break;
     case "Barley":
-      // Molotov bottle
+      // Molotov bottle with an orange flame rag
       fill("green");
       rect(20, -6, 12, 12, 4);
       rect(32, -3, 8, 6);
@@ -1212,8 +1234,8 @@ function drawWeapon(player, angle) {
   pop();
 }
 
-// draw() is the main p5.js loop. It acts as our game's engine, running 60 times a second.
-// We use it as a router to decide which part of the game to render based on the gameState.
+// draw() is the main engine loop provided by p5.js. It runs exactly 60 times every single second.
+// We use it as a traffic director to decide which part of our game code to run based on the gameState.
 function draw() {
   if (gameState === "LOBBY") {
     drawLobby();
@@ -1224,8 +1246,9 @@ function draw() {
 
 // Renders the main menu
 function drawLobby() {
-  drawBackground();
-  // Call update and draw methods for UI objects
+  drawBackground(); // Pastes the cached image to save frame rate
+  
+  // Call update and draw methods for all our created Class Objects
   for (let player of players) {
     player.update();
     player.draw();
@@ -1237,22 +1260,26 @@ function drawLobby() {
   drawMenus();
 }
 
+// ================================================================================
 // MAIN GAME ENGINE LOOP: Handles all moving parts, rendering, and logic while fighting.
+// ================================================================================
 function drawGame() {
-  background("#e6cc98"); // Draw map sand
+  background("#e6cc98"); // Draw map sand color over the entire screen to clear the previous frame
 
   // --- Process Active Combat States (Leon, Frank, Edgar windups and queues) ---
   let playersArray = [
     [bluePlayer, redPlayer],
     [redPlayer, bluePlayer],
   ];
+  
+  // Loop through both players checking their active combat states
   for (let [p, enemy] of playersArray) {
     if (p.stunTicks > 0) {
-      p.attackWindup = 0; // Cancel windup if stunned
+      p.attackWindup = 0; // Cancel windup immediately if stunned
       p.leonShots = 0; // Cancel queued shots if stunned
       p.edgarShots = 0;
     } else {
-      // Decrement timers and trigger attacks when they hit 0
+      // Decrement timers (subtract 1) and trigger attacks when they hit 0
       if (p.attackWindup > 0) {
         p.attackWindup--;
         if (p.attackWindup === 0) executeFrankSmash(p, enemy);
@@ -1260,8 +1287,8 @@ function drawGame() {
       if (p.leonShots > 0) {
         if (p.leonTimer <= 0) {
           fireLeonBlade(p);
-          p.leonShots--;
-          p.leonTimer = 6; // Set delay before next shot fires
+          p.leonShots--; // Shot fired, remove it from queue
+          p.leonTimer = 6; // Set 6-frame delay before next shot fires
         } else {
           p.leonTimer--;
         }
@@ -1279,7 +1306,7 @@ function drawGame() {
   }
 
   // --- Cooldowns & Reloading ---
-  // Reduce cooldown timers every frame
+  // Reduce shooting cooldown timers every frame
   if (bluePlayer.cooldown > 0) bluePlayer.cooldown--;
   if (redPlayer.cooldown > 0) redPlayer.cooldown--;
 
@@ -1289,10 +1316,10 @@ function drawGame() {
       p.reloadTimer++;
       if (p.reloadTimer >= BRAWLER_STATS[p.brawler].reloadTime) {
         p.ammo++; // Give 1 ammo back
-        p.reloadTimer = 0; // Reset timer for next ammo slot
+        p.reloadTimer = 0; // Reset timer to start working on the next ammo slot
       }
     } else {
-      p.reloadTimer = 0;
+      p.reloadTimer = 0; // Don't reload if already full
     }
   }
 
@@ -1302,6 +1329,7 @@ function drawGame() {
     bluePlayer.hp > 0 &&
     bluePlayer.hp < bluePlayer.maxHp
   ) {
+    // min() ensures we heal rapidly but mathematically cannot heal above maxHP
     bluePlayer.hp = min(
       bluePlayer.maxHp,
       bluePlayer.hp + bluePlayer.maxHp * 0.002
@@ -1316,7 +1344,7 @@ function drawGame() {
   }
 
   // --- Invisibility Tickers ---
-  // Countdown Leon's invisibility timer
+  // Countdown Leon's invisibility timer. When 0, strip the buff.
   if (bluePlayer.invisTicks > 0) {
     bluePlayer.invisTicks--;
     if (bluePlayer.invisTicks <= 0) bluePlayer.isInvisible = false;
@@ -1326,14 +1354,14 @@ function drawGame() {
     if (redPlayer.invisTicks <= 0) redPlayer.isInvisible = false;
   }
 
-  // --- Movement Logic (With Sliding Collision) ---
+  // --- Movement Logic (With Sliding Wall Collision) ---
   let bRad = bluePlayer.r / 2;
   let rRad = redPlayer.r / 2;
-  let nextX, nextY;
+  let nextX, nextY; // Variables to test the position they WANT to move to before confirming it
 
   // -- Blue Player Handling (WASD, Dash, or Jump) --
   if (bluePlayer.stunTicks > 0) {
-    // If stunned, they cannot move. Render a yellow star above them.
+    // If stunned, they cannot move. Render a yellow star above them to show the status.
     bluePlayer.stunTicks--;
     if (!bluePlayer.isInvisible) {
       fill("yellow");
@@ -1342,24 +1370,24 @@ function drawGame() {
       text("★", bluePlayer.x, bluePlayer.y - bluePlayer.r - 20);
     }
   } else if (bluePlayer.attackWindup > 0) {
-    // Immobilized during Frank's windup
+    // Immobilized during Frank's windup. No movement allowed.
   } else if (bluePlayer.jumpTicks > 0) {
-    // Jumping logic (Piper/Edgar). This skips wall collision so they hop over!
+    // Jumping logic (Piper/Edgar). This skips wall collision so they hop perfectly over obstacles!
     bluePlayer.jumpTicks--;
     bluePlayer.x += bluePlayer.jumpVx;
     bluePlayer.y += bluePlayer.jumpVy;
-    // Once they land, make sure they aren't stuck inside a wall graphic
+    // Once they hit the ground (ticks reach 0), make sure they aren't stuck inside a wall graphic
     if (bluePlayer.jumpTicks === 0) resolveWallStuck(bluePlayer);
   } else if (bluePlayer.dashTicks > 0) {
     // Mortis dash logic
     bluePlayer.dashTicks--;
     nextX = bluePlayer.x + bluePlayer.dashVx;
     nextY = bluePlayer.y + bluePlayer.dashVy;
-    // Move X and Y independently to allow sliding along walls instead of hard stopping
+    // Test X and Y movement independently to allow sliding smoothly along walls instead of hitting an invisible brick wall
     if (!checkWallCollision(nextX, bluePlayer.y, bRad)) bluePlayer.x = nextX;
     if (!checkWallCollision(bluePlayer.x, nextY, bRad)) bluePlayer.y = nextY;
 
-    // Mortis dash damage check: if he overlaps enemy while dashing, apply damage
+    // Mortis dash damage check: if his body overlaps the enemy while dashing, apply damage
     if (
       !bluePlayer.hasDamagedInDash &&
       dist(bluePlayer.x, bluePlayer.y, redPlayer.x, redPlayer.y) <
@@ -1369,12 +1397,12 @@ function drawGame() {
       redPlayer.lastCombatTime = frameCount;
       bluePlayer.lastCombatTime = frameCount;
       bluePlayer.hits++;
-      bluePlayer.hasDamagedInDash = true;
+      bluePlayer.hasDamagedInDash = true; // Flips boolean so he doesn't shred the enemy instantly by hitting them every frame
     }
   } else {
-    // Normal WASD movement
+    // Normal WASD movement (We do standard KeyIsDown checks so multiple keys work together for diagonals)
     nextY = bluePlayer.y;
-    if (keyIsDown(87)) nextY -= bluePlayer.speed; // W
+    if (keyIsDown(87)) nextY -= bluePlayer.speed; // W (Up is negative Y in programming!)
     if (keyIsDown(83)) nextY += bluePlayer.speed; // S
     if (!checkWallCollision(bluePlayer.x, nextY, bRad)) bluePlayer.y = nextY;
 
@@ -1384,7 +1412,8 @@ function drawGame() {
     if (!checkWallCollision(nextX, bluePlayer.y, bRad)) bluePlayer.x = nextX;
   }
 
-  // -- Red Player Handling (Arrows, Dash, or Jump) -- (Identical logic to Blue, but uses arrow keys)
+  // -- Red Player Handling (Arrows, Dash, or Jump) -- 
+  // (This is completely identical logic to Blue, but uses arrow keys instead of WASD)
   if (redPlayer.stunTicks > 0) {
     redPlayer.stunTicks--;
     if (!redPlayer.isInvisible) {
@@ -1437,23 +1466,24 @@ function drawGame() {
   redPlayer.y = constrain(redPlayer.y, rRad, height - rRad);
 
   // --- Shooting Input Checks ---
-  // If the key is held down, try to execute an attack.
-  // shootProjectile() will block it if on cooldown or out of ammo.
-  if (keyIsDown(69)) shootProjectile(bluePlayer, redPlayer, false); // E
-  if (keyIsDown(81)) shootProjectile(bluePlayer, redPlayer, true); // Q
+  // If the key is held down, attempt to execute an attack.
+  // The shootProjectile() function has built-in checks to block the attack if on cooldown or out of ammo.
+  // The numbers are JavaScript KeyCodes. (E is 69, Q is 81).
+  if (keyIsDown(69)) shootProjectile(bluePlayer, redPlayer, false); // Main Attack
+  if (keyIsDown(81)) shootProjectile(bluePlayer, redPlayer, true);  // Super
 
   if (keyIsDown(16)) shootProjectile(redPlayer, bluePlayer, false); // Shift
   if (keyIsDown(191)) shootProjectile(redPlayer, bluePlayer, true); // /
 
   // --- Draw Frank Smash Effects (Triangles) ---
-  // Loop backwards to safely delete expired items
+  // Loop backwards to safely delete expired items from the array using splice()
   for (let i = smashEffects.length - 1; i >= 0; i--) {
     let fx = smashEffects[i];
     fx.life--;
     push();
     translate(fx.x, fx.y);
     rotate(fx.angle);
-    // Reduce alpha (transparency) as life goes down to make it fade out
+    // Dynamically reduce alpha (transparency) as life goes down to make it cleanly fade out into nothingness
     fill(
       fx.isSuper
         ? color(241, 196, 15, fx.life * 15)
@@ -1487,18 +1517,19 @@ function drawGame() {
     // Draw bomb visual based on character type
     if (b.isDynamike) {
       push();
-      fill(b.radius > 50 ? "#8B4513" : "red"); // Barrel is brown, stick is red
+      fill(b.radius > 50 ? "#8B4513" : "red"); // Super Barrel is brown, normal stick is red
       rectMode(CENTER);
       if (b.radius > 50) rect(b.x, b.y, 20, 24, 3);
       else rect(b.x, b.y, 10, 20, 2);
-      // Blinking yellow fuse
+      
+      // Using modulo (%) math to create a blinking yellow fuse effect every 10 frames
       if (b.ticks % 10 < 5) {
         fill("yellow");
         circle(b.x, b.y - 10, 6);
       }
       pop();
     } else {
-      // Piper Grenade
+      // Piper Grenade Visual
       fill(0);
       noStroke();
       circle(b.x, b.y, 14);
@@ -1512,7 +1543,7 @@ function drawGame() {
     if (b.ticks <= 0) {
       // Explode Visual
       fill(255, 100, 0, 150);
-      let r = b.radius || 40;
+      let r = b.radius || 40; // Default to 40 radius if none is provided
       circle(b.x, b.y, r * 2);
 
       // --- Wall Breaking for Explosions ---
@@ -1520,7 +1551,7 @@ function drawGame() {
       if (breaksWalls) {
         for (let j = walls.length - 1; j >= 0; j--) {
           let w = walls[j];
-          // Rectangle vs Circle collision to see if explosion hits wall
+          // Complex Box-to-Circle Collision math to see if explosion radius hits the wall rectangle
           let testX = b.x;
           let testY = b.y;
           if (b.x < w.x) testX = w.x;
@@ -1535,7 +1566,7 @@ function drawGame() {
         }
       }
 
-      // Check AoE Damage on Players
+      // Check Area-of-Effect (AoE) Damage on Players
       if (
         b.owner !== "blue" &&
         dist(b.x, b.y, bluePlayer.x, bluePlayer.y) < bRad + r
@@ -1552,7 +1583,7 @@ function drawGame() {
         bluePlayer.hits++;
         redPlayer.lastCombatTime = frameCount;
       }
-      bombs.splice(i, 1); // Remove the bomb after it explodes
+      bombs.splice(i, 1); // Remove the bomb object completely after it explodes
     }
   }
 
@@ -1579,7 +1610,7 @@ function drawGame() {
     circle(pd.x, pd.y, pd.radius * 2);
     pop();
 
-    // Deal tick damage over time (every 30 frames = 0.5s)
+    // Deal "tick" damage over time (every 30 frames = 0.5s) instead of instantly
     if (pd.ticks % 30 === 0) {
       if (
         pd.owner !== "blue" &&
@@ -1601,15 +1632,15 @@ function drawGame() {
     if (pd.ticks <= 0) puddles.splice(i, 1);
   }
 
-  // --- Draw & Update Projectiles ---
-  // Iterating backwards is necessary when splicing (deleting) array items so indexes don't shift improperly
+  // --- Draw & Update Standard Projectiles ---
   for (let i = projectiles.length - 1; i >= 0; i--) {
     let p = projectiles[i];
-    // Move projectile by its velocity
+    
+    // Move projectile by its exact velocity coordinates
     p.x += p.vx;
     p.y += p.vy;
 
-    // Max Range Deletion
+    // Max Range Deletion: Calculate how far it has travelled from its start point
     let travelDist = dist(p.startX, p.startY, p.x, p.y);
     if (travelDist > p.maxRange) {
       p.active = false;
@@ -1620,7 +1651,7 @@ function drawGame() {
       for (let j = walls.length - 1; j >= 0; j--) {
         let w = walls[j];
         if (p.x >= w.x && p.x <= w.x + w.w && p.y >= w.y && p.y <= w.y + w.h) {
-          walls.splice(j, 1); // Break the wall instantly!
+          walls.splice(j, 1); // Break the wall instantly on contact!
         }
       }
     }
@@ -1631,7 +1662,7 @@ function drawGame() {
       push();
       fill(p.isSuper ? "#8B4513" : "red");
       translate(p.x, p.y);
-      rotate(frameCount * 0.2); // Make the sticks/barrel spin visually
+      rotate(frameCount * 0.2); // Multiply frame count to make the stick slowly spin in the air visually
       rectMode(CENTER);
       if (p.isSuper) rect(0, 0, 20, 24, 3);
       else rect(0, 0, 8, 16, 2);
@@ -1642,7 +1673,7 @@ function drawGame() {
         fill("#8e44ad");
         push();
         translate(p.x, p.y);
-        rotate(atan2(p.vy, p.vx));
+        rotate(atan2(p.vy, p.vx)); // Angles the oval bat perfectly in the direction it is flying!
         ellipse(0, 0, 15, 40);
         pop();
       } else {
@@ -1650,23 +1681,23 @@ function drawGame() {
         circle(p.x, p.y, 18);
       }
     } else {
-      // Standard team-colored bullets
+      // Standard team-colored bullets for normal attacks
       fill(p.owner === "blue" ? "#3498db" : "#e74c3c");
       circle(p.x, p.y, 14);
     }
 
-    // Wall collision handling
+    // Wall collision handling: Stop bullet if it doesn't have the ignoring-walls trait
     if (!p.ignoresWalls && checkProjWallCollision(p.x, p.y)) {
       p.active = false;
     }
 
-    // Screen boundary deletion
+    // Screen boundary deletion: Keep memory clean by deleting bullets that fly off-screen
     if (p.x < 0 || p.x > width || p.y < 0 || p.y > height) {
       p.active = false;
     }
 
     // Hit Detection with Players
-    let hitRadius = p.isSuper && p.brawlerName === "Mortis" ? 20 : 7;
+    let hitRadius = p.isSuper && p.brawlerName === "Mortis" ? 20 : 7; // Mortis bat has a much larger hitbox
     let hitEnemy = false;
 
     // Check collision against Blue Player
@@ -1675,28 +1706,28 @@ function drawGame() {
       dist(p.x, p.y, bluePlayer.x, bluePlayer.y) < bRad + hitRadius
     ) {
       hitEnemy = true;
-      // Barley/Dynamike projectiles don't instantly damage directly (they spawn pools/bombs)
+      // Barley/Dynamike projectiles don't instantly damage directly (they act as spawners for pools/bombs)
       if (p.brawlerName !== "Barley" && p.brawlerName !== "Dynamike") {
         let dmg = p.damage;
         if (p.brawlerName === "Piper") {
-          // Piper damage scaling: 30% damage point blank, 100% damage at max range
+          // Piper damage scaling logic: 30% damage point blank, scaling linearly up to 100% damage at max range!
           dmg *= constrain(travelDist / p.maxRange, 0.3, 1.0);
         }
         bluePlayer.hp -= dmg;
         bluePlayer.lastCombatTime = frameCount;
         redPlayer.lastCombatTime = frameCount;
-        redPlayer.hits++;
+        redPlayer.hits++; // Add charge to the enemy's super meter
 
         // Special on-hit abilities
         if (p.isSuper && p.brawlerName === "Mortis") {
-          redPlayer.hp = min(redPlayer.hp + p.damage, redPlayer.maxHp); // Mortis heal
+          redPlayer.hp = min(redPlayer.hp + p.damage, redPlayer.maxHp); // Mortis lifesteal heal
         }
         if (p.brawlerName === "Edgar") {
-          redPlayer.hp = min(redPlayer.hp + dmg * 0.5, redPlayer.maxHp); // Edgar lifesteal
+          redPlayer.hp = min(redPlayer.hp + dmg * 0.5, redPlayer.maxHp); // Edgar 50% lifesteal
         }
       }
     }
-    // Check collision against Red Player
+    // Check collision against Red Player (Identical logic)
     if (
       p.owner !== "red" &&
       dist(p.x, p.y, redPlayer.x, redPlayer.y) < rRad + hitRadius
@@ -1727,9 +1758,10 @@ function drawGame() {
       p.hitEnemy = true;
     }
 
-    // If inactive, spawn necessary secondary objects before deleting bullet
+    // If marked inactive, spawn necessary secondary objects before completely deleting the bullet
     if (!p.active) {
       if (p.brawlerName === "Barley") {
+        // Spawn puddle
         puddles.push({
           x: p.x,
           y: p.y,
@@ -1739,9 +1771,10 @@ function drawGame() {
           owner: p.owner,
         });
       } else if (p.brawlerName === "Dynamike") {
+        // Spawn bomb
         let blastRadius = p.isSuper ? 90 : 45;
         let dmg = p.isSuper ? 4400 : 1600;
-        let fuse = p.hitEnemy ? 0 : 30; // Explode instantly if hit enemy directly, else 0.5s fuse on ground
+        let fuse = p.hitEnemy ? 0 : 30; // Explode instantly if it bonks an enemy directly, else 0.5s fuse on the ground
         bombs.push({
           x: p.x,
           y: p.y,
@@ -1752,7 +1785,7 @@ function drawGame() {
           isDynamike: true,
         });
       }
-      projectiles.splice(i, 1); // Delete bullet array item
+      projectiles.splice(i, 1); // Delete bullet array item from memory completely!
     }
   }
 
@@ -1765,8 +1798,9 @@ function drawGame() {
   let redAngle = atan2(bluePlayer.y - redPlayer.y, bluePlayer.x - redPlayer.x);
 
   // Blue Player Visuals
+  // Ensure we don't draw them if they are dead (hp <= 0) or invisible!
   if (bluePlayer.hp > 0 && !bluePlayer.isInvisible) {
-    // If blue player has enough hits for their super, draw a yellow ring underneath!
+    // If blue player has enough hits for their super, draw a yellow ring underneath to indicate readiness!
     if (bluePlayer.hits >= BRAWLER_STATS[bluePlayer.brawler].hitsToSuper) {
       noFill();
       stroke("yellow");
@@ -1783,7 +1817,7 @@ function drawGame() {
     // Call our function to draw the weapon on top
     drawWeapon(bluePlayer, blueAngle);
 
-    // Doug Hotdog Visual (Moved so it sits on top of the blue circle head)
+    // Doug Hotdog Visual (Moved so it sits cleanly on top of the blue circle head)
     if (bluePlayer.hotdogTicks > 0) {
       push();
       fill("#d2691e");
@@ -1823,19 +1857,22 @@ function drawGame() {
     }
   }
 
-  // --- Draw Health Bars & Ammo ---
-  let barW = 60;
+  // --- Draw Health Bars & Ammo Bars ---
+  let barW = 60; // Max pixel width of the bar
   let barH = 10;
   rectMode(CENTER);
 
-  // Render Blue HUD over character
+  // Render Blue HUD directly over the character
   if (bluePlayer.hp > 0 && !bluePlayer.isInvisible) {
-    fill(0); // Black backing
+    fill(0); // Black backing outline
     rectMode(CENTER);
     rect(bluePlayer.x, bluePlayer.y - bluePlayer.r - 10, barW + 4, barH + 4, 4);
-    fill("#2ecc71"); // Green fill
+    fill("#2ecc71"); // Green fill color
+    
+    // Calculate what percentage of health is left (e.g. 0.5 for 50%)
     let hpPctB = max(0, bluePlayer.hp / bluePlayer.maxHp);
     rectMode(CORNER);
+    // Draw the green bar width based on the percentage
     rect(
       bluePlayer.x - barW / 2,
       bluePlayer.y - bluePlayer.r - 10 - barH / 2,
@@ -1843,10 +1880,12 @@ function drawGame() {
       barH,
       2
     );
+    
+    // Print the actual HP number inside the bar
     fill(255);
     textSize(10);
     textAlign(CENTER, CENTER);
-    // Math.floor cleans up decimals generated during auto-heal
+    // Math.floor cleans up ugly decimals generated during auto-healing
     text(
       Math.floor(bluePlayer.hp),
       bluePlayer.x,
@@ -1859,13 +1898,14 @@ function drawGame() {
     rectMode(CENTER);
     rect(bluePlayer.x, ammoY, barW + 4, 6, 2);
     rectMode(CORNER);
-    let segW = barW / 3;
+    let segW = barW / 3; // Divide the bar perfectly into 3 ammo segments
     for (let i = 0; i < 3; i++) {
       if (i < bluePlayer.ammo) {
-        fill("#f39c12"); // Ready Ammo (Orange)
+        fill("#f39c12"); // Ready Ammo (Solid Orange)
         rect(bluePlayer.x - barW / 2 + i * segW + 1, ammoY - 2, segW - 2, 4, 1);
       } else if (i === bluePlayer.ammo) {
         fill(255, 165, 0, 100); // Reloading Ammo (Faded Orange rendering progress)
+        // Draw partial segment based on reload timer progress
         let reloadPct =
           bluePlayer.reloadTimer / BRAWLER_STATS[bluePlayer.brawler].reloadTime;
         rect(
@@ -1879,7 +1919,7 @@ function drawGame() {
     }
   }
 
-  // Render Red HUD over character
+  // Render Red HUD directly over character (Identical logic)
   if (redPlayer.hp > 0 && !redPlayer.isInvisible) {
     fill(0);
     rectMode(CENTER);
@@ -1928,14 +1968,14 @@ function drawGame() {
   // --- Draw Screen Edge HUD (Stats Displays) ---
   rectMode(CORNER);
 
-  // Blue Screen Corner HUD
+  // Blue Screen Corner HUD Box
   fill(0, 150);
   rect(20, height - 100, 360, 80, 10);
   fill(255);
   textAlign(LEFT, TOP);
   textSize(20);
 
-  // Look up the projectile count to display in the HUD (e.g. 600 (x5))
+  // Look up the projectile count to display in the HUD dynamically (e.g. 600 (x5))
   let bProj = BRAWLER_STATS[bluePlayer.brawler].projectiles;
   let bDmgText =
     bProj > 1 ? `${bluePlayer.damage} (x${bProj})` : bluePlayer.damage;
@@ -1945,7 +1985,7 @@ function drawGame() {
   fill(200);
   text(`${bluePlayer.superDesc}\nE to Attack | Q to Super`, 30, height - 60);
 
-  // Red Screen Corner HUD
+  // Red Screen Corner HUD Box
   fill(0, 150);
   rect(width - 380, height - 100, 360, 80, 10);
   fill(255);
@@ -1972,7 +2012,7 @@ function drawGame() {
   textAlign(LEFT, TOP);
   text("ESC = Lobby | Blue: WASD | Red: Arrows", 20, 20);
 
-  // Draw round score (Best of 3 Tracking)
+  // Draw round score (Best of 3 Tracking in top corners)
   fill("#f1c40f");
   textSize(24);
   textAlign(LEFT, TOP);
@@ -1985,36 +2025,36 @@ function drawGame() {
   // First, check Doug Revive mechanic
   if (bluePlayer.hp <= 0 && bluePlayer.hotdogTicks > 0) {
     bluePlayer.hp = bluePlayer.maxHp;
-    bluePlayer.hotdogTicks = 0; // Consume the hotdog
+    bluePlayer.hotdogTicks = 0; // Consume the hotdog so it can't be used twice
   }
   if (redPlayer.hp <= 0 && redPlayer.hotdogTicks > 0) {
     redPlayer.hp = redPlayer.maxHp;
     redPlayer.hotdogTicks = 0;
   }
 
-  // Check if the round is actually over
+  // Check if the round is actually over by seeing if someone is fully dead
   let roundOver = false;
   if (bluePlayer.hp <= 0 && redPlayer.hp <= 0) {
     roundOver = true; // Tie round! No points awarded.
   } else if (bluePlayer.hp <= 0) {
-    redWins++;
+    redWins++; // Give point to red
     roundOver = true;
   } else if (redPlayer.hp <= 0) {
-    blueWins++;
+    blueWins++; // Give point to blue
     roundOver = true;
   }
 
   // Process round over logic
   if (roundOver) {
     if (blueWins >= 2 || redWins >= 2) {
-      // Match is completely over! Return to Lobby UI
+      // First to 2 wins! Match is completely over! Return to Lobby UI
       if (blueWins === redWins) lastWinner = "tie";
       else if (blueWins > redWins) lastWinner = "blue";
       else lastWinner = "red";
 
-      gameState = "LOBBY";
+      gameState = "LOBBY"; // Switch the state machine back to Lobby mode
       gameMusic.pause();
-      lobbyMusic.play().catch((e) => {});
+      lobbyMusic.play().catch((e) => {}); // Swap the audio tracks
     } else {
       // Match continues! Reset positions for the next round
       startNextRound();
@@ -2022,16 +2062,22 @@ function drawGame() {
   }
 }
 
+/* =================================================================================
+   OPTIMIZATION & CACHING
+   ================================================================================= */
+
 // Optimization: Generates the complicated neon background circles ONCE and saves it to a graphic object.
-// This prevents the game from lagging by not having to calculate 100 circles every single frame.
+// This prevents the game from lagging by avoiding calculating 100 huge circles every single frame.
 function renderStaticBackground() {
   bgGraphics.background("#1a2a6c");
   let center_x = bgGraphics.width / 2;
   let center_y = bgGraphics.height / 2;
 
   bgGraphics.noFill();
-  // Loop from max screen size down to 0, drawing circles smaller and smaller
+  // Loop from max screen size down to 0, drawing circles smaller and smaller inwards
   for (let r = max(bgGraphics.width, bgGraphics.height); r > 0; r -= 15) {
+    // map() converts a number from one range to another. 
+    // Here we map radius size to a 0-1 scale so we can use it to calculate the color gradient.
     let inter = map(r, 0, max(bgGraphics.width, bgGraphics.height), 0, 1);
     let c = lerpColor(color("#11998e"), color("#38ef7d"), inter); // Smooth color gradient
     bgGraphics.stroke(c);
@@ -2039,7 +2085,7 @@ function renderStaticBackground() {
     bgGraphics.ellipse(center_x, center_y, r, r * 0.8);
   }
 
-  // Add center darkening effect
+  // Add center darkening shadow effect
   bgGraphics.fill(0, 0, 0, 80);
   bgGraphics.noStroke();
   bgGraphics.ellipse(
@@ -2050,7 +2096,7 @@ function renderStaticBackground() {
   );
 }
 
-// Simply pastes the pre-rendered image to the screen
+// Simply pastes the pre-rendered image to the screen. SUPER fast compared to drawing from scratch!
 function drawBackground() {
   imageMode(CORNER);
   image(bgGraphics, 0, 0);
@@ -2058,32 +2104,36 @@ function drawBackground() {
 
 // Renders the pop-up Character Select menus in the Lobby
 function drawMenus() {
-  let menuItems = ["<- BACK"].concat(brawlerList); // Create array of options
-  let itemHeight = height / menuItems.length; // Space them evenly
+  // .concat() merges two arrays. We add a "BACK" button to the top of our brawler list!
+  let menuItems = ["<- BACK"].concat(brawlerList); 
+  let itemHeight = height / menuItems.length; // Space them evenly top-to-bottom
 
+  // Draw Player 1's left-side menu
   if (leftMenuOpen) {
     fill(0, 0, 0, 230); // Transparent black background overlay
     rectMode(CORNER);
     rect(0, 0, width / 2, height);
+    
     // Loop through and draw all character names
     for (let i = 0; i < menuItems.length; i++) {
       let y = i * itemHeight;
-      // Hover effect
+      // Box collision logic to create a hover highlight effect
       if (
         mouseX > 0 &&
         mouseX < width / 2 &&
         mouseY > y &&
         mouseY < y + itemHeight
       ) {
-        fill(255, 255, 255, 40);
+        fill(255, 255, 255, 40); // White highlight
         rect(0, y, width / 2, itemHeight);
       }
       stroke(255, 255, 255, 50);
       strokeWeight(1);
-      line(0, y + itemHeight, width / 2, y + itemHeight);
-      if (i === 0) fill(255, 100, 100);
-      // Red color for "BACK" button
+      line(0, y + itemHeight, width / 2, y + itemHeight); // Divider line
+      
+      if (i === 0) fill(255, 100, 100); // Highlight "BACK" button in Red
       else fill(255);
+      
       noStroke();
       textAlign(CENTER, CENTER);
       textSize(min(itemHeight * 0.4, 40));
@@ -2091,6 +2141,7 @@ function drawMenus() {
     }
   }
 
+  // Draw Player 2's right-side menu (Identical logic)
   if (rightMenuOpen) {
     fill(0, 0, 0, 230);
     rectMode(CORNER);
@@ -2125,32 +2176,34 @@ function drawMenus() {
            ================================================================================= */
 
 function mousePressed() {
-  // Browsers block auto-playing audio until the user interacts with the page.
-  // This catches the first click and starts the music.
+  // Browsers strictly block auto-playing audio until the user manually clicks the page.
+  // This catches the very first click on the game window and forces the music to start!
   if (gameState === "LOBBY" && lobbyMusic.paused) {
     lobbyMusic
       .play()
       .catch((e) => console.log("Waiting for user to interact..."));
   }
 
-  if (gameState !== "LOBBY") return; // Menu clicks only work in Lobby state
+  // Menu clicks only work in Lobby state. Ignore clicks during fighting.
+  if (gameState !== "LOBBY") return; 
 
   let menuItems = ["<- BACK"].concat(brawlerList);
   let itemHeight = height / menuItems.length;
 
-  // Handle clicking items in the Left character select menu
+  // Handle clicking items inside the Left character select menu
   if (leftMenuOpen && mouseX < width / 2) {
-    let index = floor(mouseY / itemHeight); // Math to find which index was clicked
+    // Math.floor rounds down. E.g., if mouse is at Y=200, and itemHeight is 50, 200/50 = index 4!
+    let index = floor(mouseY / itemHeight); 
     if (index === 0) {
-      leftMenuOpen = false; // "BACK" clicked
+      leftMenuOpen = false; // "BACK" clicked, close menu
     } else if (index > 0 && index < menuItems.length) {
-      players[0].name = menuItems[index]; // Update selected brawler string
+      players[0].name = menuItems[index]; // Update selected brawler string inside Player 1's object
       leftMenuOpen = false;
     }
     return;
   }
 
-  // Handle clicking items in the Right character select menu
+  // Handle clicking items inside the Right character select menu
   if (rightMenuOpen && mouseX > width / 2) {
     let index = floor(mouseY / itemHeight);
     if (index === 0) {
@@ -2162,17 +2215,17 @@ function mousePressed() {
     return;
   }
 
-  // Loop through our UI buttons and trigger logic if clicked
+  // Loop through our physical UI buttons array and trigger their programmed logic if clicked
   for (let btn of buttons) {
     if (btn.isClicked(mouseX, mouseY)) {
       if (btn.id === "play") {
         gameState = "GAME";
         lobbyMusic.pause(); // Pause menu music
-        gameMusic.currentTime = 0; // Restart battle music from beginning
+        gameMusic.currentTime = 0; // Rewind battle music to 0:00
         gameMusic.play().catch((e) => {});
-        initGame(); // Starts the logic resetting the map and characters
+        initGame(); // Kick off the match preparation function!
       } else if (btn.id === "brawlers_left") {
-        leftMenuOpen = !leftMenuOpen;
+        leftMenuOpen = !leftMenuOpen; // Toggle boolean (if true -> false, if false -> true)
       } else if (btn.id === "brawlers_right") {
         rightMenuOpen = !rightMenuOpen;
       }
@@ -2181,7 +2234,8 @@ function mousePressed() {
 }
 
 function keyPressed() {
-  // keyCode 27 is the ESC key. Allows quitting mid-match.
+  // keyCode inside p5.js automatically tracks standard keyboard buttons.
+  // ESCAPE allows quitting mid-match gracefully.
   if (keyCode === ESCAPE && gameState === "GAME") {
     gameState = "LOBBY";
     gameMusic.pause();
@@ -2190,17 +2244,19 @@ function keyPressed() {
 }
 
 function windowResized() {
-  // Allows the canvas to shrink or grow dynamically if the user resizes the browser window
+  // Allows the canvas to shrink or grow dynamically if the user resizes their browser window
   resizeCanvas(windowWidth, windowHeight);
 
-  // Since our cached background graphic is size-specific, we have to rebuild it
+  // Since our cached background graphic is heavily dependent on specific screen sizes, 
+  // we have to delete it and rebuild it!
   bgGraphics = createGraphics(windowWidth, windowHeight);
   renderStaticBackground();
 
-  // Re-run initialization to fix positions based on new screen width
+  // Re-run initialization to fix the positions of players and walls based on new screen width
   if (gameState === "LOBBY") initScene();
   else if (gameState === "GAME") initMap();
 }
+
     </script>
 </body>
 </html>
