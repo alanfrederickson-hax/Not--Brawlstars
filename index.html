@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brawl Stars Lobby Concept</title>
+    <title>Brawl Stars 2.0</title>
     
     <!-- Load Lilita One Font from Google Fonts for that authentic arcade look -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2115,8 +2115,13 @@ function renderStaticBackground() {
 
 // Simply pastes the pre-rendered image to the screen. SUPER fast compared to drawing from scratch!
 function drawBackground() {
-  imageMode(CORNER);
-  image(bgGraphics, 0, 0);
+  // Fix to ensure that we don't try to draw a background if the canvas size was temporarily invalid (like during a window resize)
+  if (bgGraphics && bgGraphics.width > 0 && bgGraphics.height > 0) {
+    imageMode(CORNER);
+    image(bgGraphics, 0, 0);
+  } else {
+    background("#1a2a6c"); // Fallback simple color so the screen doesn't break
+  }
 }
 
 // Renders the pop-up Character Select menus in the Lobby
@@ -2262,16 +2267,19 @@ function keyPressed() {
 
 function windowResized() {
   // Allows the canvas to shrink or grow dynamically if the user resizes their browser window
-  resizeCanvas(windowWidth, windowHeight);
+  // Check to make sure the window size isn't 0 (which happens momentarily on some browsers)
+  if (windowWidth > 0 && windowHeight > 0) {
+    resizeCanvas(windowWidth, windowHeight);
 
-  // Since our cached background graphic is heavily dependent on specific screen sizes, 
-  // we have to delete it and rebuild it!
-  bgGraphics = createGraphics(windowWidth, windowHeight);
-  renderStaticBackground();
+    // Since our cached background graphic is heavily dependent on specific screen sizes, 
+    // we have to delete it and rebuild it!
+    bgGraphics = createGraphics(windowWidth, windowHeight);
+    renderStaticBackground();
 
-  // Re-run initialization to fix the positions of players and walls based on new screen width
-  if (gameState === "LOBBY") initScene();
-  else if (gameState === "GAME") initMap();
+    // Re-run initialization to fix the positions of players and walls based on new screen width
+    if (gameState === "LOBBY") initScene();
+    else if (gameState === "GAME") initMap();
+  }
 }
 
     </script>
