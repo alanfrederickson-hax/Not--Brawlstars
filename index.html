@@ -416,38 +416,60 @@ class Player {
 // (like images and fonts) FIRST, so they don't awkwardly pop-in halfway through playing.
 function preload() {
   
-  // Load our local font file! 
-  // IMPORTANT: The online preview environment blocks loading local files from your hard drive, 
-  // so I commented this out to prevent the Invalid URL error. 
-  // WHEN YOU RUN THIS LOCALLY ON YOUR COMPUTER: Remove the '//' from the start of the line below!
-  // customFont = loadFont('LilitaOne.ttf');
+  // --- ENVIRONMENT DETECTION FIX ---
+  // We need to detect if you are running this in the temporary online AI preview window.
+  // The preview environment strictly forbids loading relative local files (like "Doug.webp"), which crashes the engine.
+  // By testing if a relative URL can be parsed, the game seamlessly falls back to Web URLs for the preview,
+  // and automatically uses your Local File Paths when you deploy it to GitHub!
+  let canUseLocalFiles = true;
+  try {
+    new URL("test.webp", window.location.href);
+  } catch (e) {
+    canUseLocalFiles = false; // Fails in restricted sandboxes
+  }
+  if (window.location.hostname.includes("usercontent.goog") || window.location.protocol === 'data:' || window.location.protocol === 'blob:') {
+    canUseLocalFiles = false; // Force web URLs in the AI preview canvas
+  }
+
+  // Attempt to load the local font ONLY if not in the AI preview
+  if (canUseLocalFiles) {
+    try { customFont = loadFont('LilitaOne.ttf'); } catch(e) {}
+  }
   
-  // This is a custom helper function. It attempts to load an image, and if the internet fails,
-  // it logs a warning instead of crashing the entire game!
-  const safeLoadImage = (url, name) => {
-    loadImage(
-      url,
-      (img) => {
-        brawlerImages[name] = img; // If success, store it in the dictionary
-      },
-      (err) => {
-        console.warn(`Failed to load image for ${name}`);
-      }
-    );
+  // This is our new, extra-safe smart image loader!
+  const safeLoadImage = (localPath, webUrl, name) => {
+    // Pick which URL to use based on where the game is being played
+    let urlToUse = canUseLocalFiles ? localPath : webUrl;
+    
+    try {
+      loadImage(
+        urlToUse,
+        (img) => { brawlerImages[name] = img; },
+        (err) => { 
+          console.warn(`Failed to load image for ${name} at ${urlToUse}`); 
+          // If local file fails on Github (e.g. typo in filename), fallback to web URL!
+          if (urlToUse === localPath) {
+            loadImage(webUrl, (img) => { brawlerImages[name] = img; });
+          }
+        }
+      );
+    } catch(e) {
+      console.warn(`Error parsing URL for ${name}`);
+    }
   };
 
-  // Loading all character models and weapon images using web links
-  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/4/4d/Doug_Skin-Default.png/revision/latest?cb=20260326184421", "Doug");
-  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/3/33/Leon_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251010150951", "Leon");
-  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/5/5e/Shelly_Skin-Default.png/revision/latest/scale-to-width-down/249?cb=20251013023733", "Shelly");
-  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/5/55/Frank_Skin-Default.png/revision/latest?cb=20250208034133", "Frank");
-  safeLoadImage("https://media.tenor.com/fy_w5CJQ5R0AAAAj/brawl-stars-brawl-stars-meme.gif", "Edgar");
-  safeLoadImage("https://static.wikia.nocookie.net/vsbattles/images/5/59/Barley_Skin-Default.webp/revision/latest?cb=20230714220010", "Barley");
-  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/6/6e/Dynamike_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20250913230712", "Dynamike");
-  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/8/8a/Colt_Skin-Default.png/revision/latest?cb=20251013020251", "Colt");
-  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/b/b2/Mortis_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251020175238", "Mortis");
-  safeLoadImage("https://static.wikia.nocookie.net/brawlstars/images/5/5d/Piper_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251018180616", "Piper");
-  safeLoadImage("https://preview.redd.it/i-made-a-model-of-shellys-shotgun-what-do-you-think-v0-fv5pb1m3vkc21.png?width=640&crop=smart&auto=webp&s=b9d0a1ca7ebea77a9410adbb8b2cfd0a66a58d2d", "ShellyWeapon");
+  // Automatically loads local files on GitHub, but safely uses Web URLs in the AI preview window!
+  safeLoadImage("Doug.webp", "https://static.wikia.nocookie.net/brawlstars/images/4/4d/Doug_Skin-Default.png/revision/latest?cb=20260326184421", "Doug");
+  safeLoadImage("Leon.webp", "https://static.wikia.nocookie.net/brawlstars/images/3/33/Leon_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251010150951", "Leon");
+  safeLoadImage("Shelly.webp", "https://static.wikia.nocookie.net/brawlstars/images/5/5e/Shelly_Skin-Default.png/revision/latest/scale-to-width-down/249?cb=20251013023733", "Shelly");
+  safeLoadImage("Frank.webp", "https://static.wikia.nocookie.net/brawlstars/images/5/55/Frank_Skin-Default.png/revision/latest?cb=20250208034133", "Frank");
+  safeLoadImage("Edgar.webp", "https://media.tenor.com/fy_w5CJQ5R0AAAAj/brawl-stars-brawl-stars-meme.gif", "Edgar");
+  safeLoadImage("Barley.webp", "https://static.wikia.nocookie.net/vsbattles/images/5/59/Barley_Skin-Default.webp/revision/latest?cb=20230714220010", "Barley");
+  safeLoadImage("Dynamike.webp", "https://static.wikia.nocookie.net/brawlstars/images/6/6e/Dynamike_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20250913230712", "Dynamike");
+  safeLoadImage("Colt.jpg", "https://static.wikia.nocookie.net/brawlstars/images/8/8a/Colt_Skin-Default.png/revision/latest?cb=20251013020251", "Colt");
+  safeLoadImage("Mortis.png", "https://static.wikia.nocookie.net/brawlstars/images/b/b2/Mortis_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251020175238", "Mortis"); // Mortis is the special .png exception!
+  safeLoadImage("Piper.webp", "https://static.wikia.nocookie.net/brawlstars/images/5/5d/Piper_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251018180616", "Piper");
+  safeLoadImage("ShellyWeapon.webp", "https://preview.redd.it/i-made-a-model-of-shellys-shotgun-what-do-you-think-v0-fv5pb1m3vkc21.png?width=640&crop=smart&auto=webp&s=b9d0a1ca7ebea77a9410adbb8b2cfd0a66a58d2d", "ShellyWeapon");
 }
 
 // setup() runs ONCE exactly after preload finishes. It configures the canvas and audio logic.
