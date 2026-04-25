@@ -352,7 +352,9 @@ class Player {
 
     // Find the loaded image from our brawlerImages dictionary
     let img = brawlerImages[this.name];
-    if (img) { // Safety check: Did the image actually load successfully from the internet?
+    
+    // SAFETY CHECK FIX: Ensure the image successfully loaded and has a real size before drawing!
+    if (img && img.width > 0 && img.height > 0) { 
       let aspect = img.width / img.height; // Figure out the original rectangle shape (aspect ratio)
       let drawH = 160; // We force the height to be 160 pixels
       let drawW = drawH * aspect; // And calculate the width based on the aspect ratio so it doesn't look stretched!
@@ -454,13 +456,16 @@ function preload() {
   safeLoadImage("./Leon.webp", "https://static.wikia.nocookie.net/brawlstars/images/3/33/Leon_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251010150951", "Leon");
   safeLoadImage("./Shelly.webp", "https://static.wikia.nocookie.net/brawlstars/images/5/5e/Shelly_Skin-Default.png/revision/latest/scale-to-width-down/249?cb=20251013023733", "Shelly");
   safeLoadImage("./Frank.webp", "https://static.wikia.nocookie.net/brawlstars/images/5/55/Frank_Skin-Default.png/revision/latest?cb=20250208034133", "Frank");
-  safeLoadImage("./Edgar.webp", "https://media.tenor.com/fy_w5CJQ5R0AAAAj/brawl-stars-brawl-stars-meme.gif", "Edgar");
+  safeLoadImage("./edgar.gif", "https://media.tenor.com/fy_w5CJQ5R0AAAAj/brawl-stars-brawl-stars-meme.gif", "Edgar"); // Updated to edgar.gif
   safeLoadImage("./Barley.webp", "https://static.wikia.nocookie.net/vsbattles/images/5/59/Barley_Skin-Default.webp/revision/latest?cb=20230714220010", "Barley");
   safeLoadImage("./Dynamike.webp", "https://static.wikia.nocookie.net/brawlstars/images/6/6e/Dynamike_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20250913230712", "Dynamike");
-  safeLoadImage("./Colt.jpg", "https://static.wikia.nocookie.net/brawlstars/images/8/8a/Colt_Skin-Default.png/revision/latest?cb=20251013020251", "Colt");
+  
+  // FIX: Updated to look for .webp instead of .jpg to match your Github files perfectly!
+  safeLoadImage("./Colt.webp", "https://static.wikia.nocookie.net/brawlstars/images/8/8a/Colt_Skin-Default.png/revision/latest?cb=20251013020251", "Colt");
+  
   safeLoadImage("./Mortis.png", "https://static.wikia.nocookie.net/brawlstars/images/b/b2/Mortis_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251020175238", "Mortis");
   safeLoadImage("./Piper.webp", "https://static.wikia.nocookie.net/brawlstars/images/5/5d/Piper_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251018180616", "Piper");
-  safeLoadImage("./ShellyWeapon.webp", "https://preview.redd.it/i-made-a-model-of-shellys-shotgun-what-do-you-think-v0-fv5pb1m3vkc21.png?width=640&crop=smart&auto=webp&s=b9d0a1ca7ebea77a9410adbb8b2cfd0a66a58d2d", "ShellyWeapon");
+  safeLoadImage("./shotgun.jpeg", "https://preview.redd.it/i-made-a-model-of-shellys-shotgun-what-do-you-think-v0-fv5pb1m3vkc21.png?width=640&crop=smart&auto=webp&s=b9d0a1ca7ebea77a9410adbb8b2cfd0a66a58d2d", "ShellyWeapon"); // Updated to shotgun.jpeg
 }
 
 // setup() runs ONCE exactly after preload finishes. It configures the canvas and audio logic.
@@ -1140,7 +1145,8 @@ function drawWeapon(player, angle) {
   switch (player.brawler) {
     case "Shelly":
       let wImg = brawlerImages["ShellyWeapon"];
-      if (wImg && wImg.width > 0) {
+      // SAFETY CHECK FIX: Ensure the image successfully loaded and has a real size before drawing!
+      if (wImg && wImg.width > 0 && wImg.height > 0) {
         let aspect = wImg.width / wImg.height;
         let drawH = 25;
         let drawW = drawH * aspect;
