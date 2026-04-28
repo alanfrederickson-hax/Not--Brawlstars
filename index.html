@@ -5,47 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BrawlStars 2.0</title>
     
-    <!-- Load Lilita One Font from Google Fonts for that authentic arcade look -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet">
     
-    <!-- Load p5.js library. This is a library created by artists and coders to make drawing on the web easy. 
-         It gives us pre-built functions like circle(), rect(), and the magic draw() loop. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
 
-    <!-- CSS Styling to ensure our game canvas takes up the whole screen without scrollbars -->
     <style>
         body {
             margin: 0;
             padding: 0;
-            overflow: hidden; /* Prevent scrollbars from appearing when things move to the edge */
+            overflow: hidden;
             background-color: #000;
         }
         canvas {
-            display: block; /* Removes weird margins around the canvas element */
+            display: block;
         }
     </style>
 </head>
 <body>
     <script>
-        /* =================================================================================
-           GLOBAL VARIABLES
-           These variables are declared OUTSIDE of any function. That makes them "Global".
-           A global variable can be read and changed by ANY function in the entire game.
-           ================================================================================= */
+let buttons = [];
+let players = [];
+let lobbyMusic;
+let gameMusic;
+let customFont;
+let controllerSwitch;
 
-// --- UI Elements ---
-// Arrays are lists. We define an empty list using brackets: []
-let buttons = []; // We will fill this list with all our clickable buttons later
-let players = []; // We will fill this list with the visual players shown in the lobby
-let lobbyMusic; // A variable to hold our lobby music player
-let gameMusic;  // A variable to hold our battle music player
-let customFont; // Variable to hold our downloaded local font file
-let controllerSwitch; // The animated visual switch for gamepads
-
-// --- Menu Variables ---
-// A list (Array) of all available characters users can pick. We use strings (text inside quotes).
 let brawlerList = [
   "Shelly",
   "Colt",
@@ -58,63 +44,42 @@ let brawlerList = [
   "Doug",
   "Barley",
 ];
-// Booleans are variables that are ONLY true or false. We use them as on/off switches for the menus.
+
 let leftMenuOpen = false; 
 let rightMenuOpen = false; 
 
-/* Let's talk about {} !
-  When you see `let varName = {}`, you are creating an empty JavaScript "Object".
-  An Object is like a digital backpack. You can store multiple named things inside it.
-  Here, brawlerImages is an empty backpack. Later, we will store images in it, labeled
-  by the brawler's name. Example: brawlerImages["Leon"] = (The actual picture of Leon).
-*/
 let brawlerImages = {}; 
-let bgGraphics; // Cache for background to prevent lag (stores a static image of the lobby background)
+let bgGraphics; 
 
-// --- Game State Variables ---
-// gameState acts as a "State Machine", a core concept in game design.
-// If the state is "LOBBY", the draw() loop only runs the lobby menu code.
-// If the state is "GAME", it ignores the menu code and runs the fighting code!
 let gameState = "LOBBY";
-let lastWinner = null; // null means "nothing yet". 
-let blueWins = 0; // Integers (numbers) track the score
+let lastWinner = null; 
+let blueWins = 0; 
 let redWins = 0; 
-let blueTotalWins = 0; // Lifetime wins shown in Lobby
-let redTotalWins = 0;  // Lifetime wins shown in Lobby
-let blueTotalDamage = 0; // Lifetime damage shown in Lobby
-let redTotalDamage = 0;  // Lifetime damage shown in Lobby
-let useControllers = false; // Toggles Gamepad support
+let blueTotalWins = 0; 
+let redTotalWins = 0;  
+let blueTotalDamage = 0; 
+let redTotalDamage = 0;  
+let useControllers = false; 
 
-/* =================================================================================
-   JAVASCRIPT OBJECTS EXPLAINED
-   Below is a JavaScript Object. It is created using curly braces { }.
-   Inside the braces are "Key: Value" pairs.
-   Think of an object like a Character Sheet in a video game.
-   Instead of making 15 different variables like bluePlayerHp, bluePlayerSpeed, etc.,
-   we group them all into one clean "Object" called bluePlayer.
-   To access the health, we just type: bluePlayer.hp
-   To change the x position, we type: bluePlayer.x = 100
-   ================================================================================= */
 let bluePlayer = {
-  id: "blue",          // A String (text) to identify which team this is
-  x: 0,                // Current horizontal position on screen
-  y: 0,                // Current vertical position on screen
-  r: 35,               // Radius (size) of the player circle
-  speed: 5,            // How many pixels they move per frame when pressing WASD
-  cooldown: 0,         // Timer to prevent shooting every single frame
-  maxCooldown: 30,     // How long the cooldown lasts
-  hits: 0,             // Number of successful attacks (charges the Super)
-  ammo: 3,             // How many attacks they have ready
-  reloadTimer: 0,      // Timer tracking how close they are to getting 1 ammo back
-  lastCombatTime: 0,   // Timestamp of their last fight to calculate auto-healing
-  dashTicks: 0,        // How long their dash (like Mortis) will last
-  dashVx: 0,           // Dash Velocity X (horizontal movement speed during dash)
-  dashVy: 0,           // Dash Velocity Y (vertical movement speed during dash)
-  hasDamagedInDash: false, // A boolean to ensure Mortis only damages an enemy ONCE per dash
-  damageDealt: 0,      // Tracks total damage dealt in the match
+  id: "blue",
+  x: 0,
+  y: 0,
+  r: 35,
+  speed: 5,
+  cooldown: 0,
+  maxCooldown: 30,
+  hits: 0,
+  ammo: 3,
+  reloadTimer: 0,
+  lastCombatTime: 0,
+  dashTicks: 0,
+  dashVx: 0,
+  dashVy: 0,
+  hasDamagedInDash: false,
+  damageDealt: 0,
 };
 
-// Red player is structurally identical to Blue Player, just a separate Object!
 let redPlayer = {
   id: "red",
   x: 0,
@@ -134,20 +99,13 @@ let redPlayer = {
   damageDealt: 0,
 };
 
-// Game Object Arrays: These store things that exist temporarily in the world
-let walls = []; // Will hold objects like {x: 10, y: 10, w: 50, h: 50} for collision
-let projectiles = []; // Will hold moving bullets
-let smashEffects = []; // Array for Frank's attack visuals (triangle shapes)
-let bombs = []; // Array for Piper and Dynamike's delayed explosives
-let puddles = []; // Array for Barley's area-of-effect fire puddles
-let dougSplashes = []; // Array for Doug's splash heal/damage visual
+let walls = [];
+let projectiles = [];
+let smashEffects = [];
+let bombs = [];
+let puddles = [];
+let dougSplashes = [];
 
-/* --- Brawler Stats Dictionary ---
-   This is an Object containing OTHER Objects! It's called a "Lookup Dictionary".
-   Instead of coding Shelly's damage everywhere, we just look it up.
-   If we want to know Frank's HP, we write: BRAWLER_STATS["Frank"].hp
-   This makes balancing the game incredibly easy. You just change the number here,
-   and the entire game updates automatically! */
 const BRAWLER_STATS = {
   Frank: {
     hp: 13400,
@@ -158,7 +116,7 @@ const BRAWLER_STATS = {
     superProjectiles: 1,
     range: 160,
     superRange: 250,
-    reloadTime: 48, // Math note: Our game runs at 60 frames per second. 48 frames / 60 = 0.8 seconds to reload!
+    reloadTime: 48,
   }, 
   Piper: {
     hp: 4800,
@@ -252,11 +210,6 @@ const BRAWLER_STATS = {
   }, 
 };
 
-/* =================================================================================
-   CLASSES (Object Oriented Programming)
-   ================================================================================= */
-
-// --- Animated Toggle Switch Class ---
 class ToggleSwitch {
   constructor(x, y, w, h, label) {
     this.x = x;
@@ -265,19 +218,16 @@ class ToggleSwitch {
     this.h = h;
     this.label = label;
     this.hover = false;
-    // knobPos tracks the animation between 0 (left/off) and 1 (right/on)
     this.knobPos = useControllers ? 1 : 0;
   }
 
   update(mx, my) {
-    // Standard bounding box hover detection
     if (mx > this.x - this.w / 2 && mx < this.x + this.w / 2 && my > this.y - this.h / 2 && my < this.y + this.h / 2) {
       this.hover = true;
     } else {
       this.hover = false;
     }
 
-    // Smoothly interpolate the knob's position towards its target state
     let target = useControllers ? 1 : 0;
     this.knobPos = lerp(this.knobPos, target, 0.2);
   }
@@ -286,34 +236,32 @@ class ToggleSwitch {
     push();
     translate(this.x, this.y);
 
-    // Draw the "Controller Mode" text hovering beautifully above the pill switch
     fill(255);
     noStroke();
     textAlign(CENTER, BOTTOM);
     textSize(20);
     text(this.label, 0, -this.h / 2 - 5);
 
-    // Draw the background pill shape (fades from dark grey to red smoothly)
     let bgCol = lerpColor(color("#34495e"), color("#e74c3c"), this.knobPos);
     fill(bgCol);
+    
     if (this.hover) {
       stroke(255, 255, 255, 100);
       strokeWeight(3);
     } else {
       noStroke();
     }
+    
     rectMode(CENTER);
-    rect(0, 0, this.w, this.h, this.h); // Using this.h makes the corners perfectly circular
+    rect(0, 0, this.w, this.h, this.h); 
 
-    // Draw the sliding inner knob (white circle)
     let knobTravel = this.w - this.h; 
     let knobX = map(this.knobPos, 0, 1, -knobTravel / 2, knobTravel / 2);
     
-    // Tiny shadow under the knob for that 3D iOS look
     fill(0, 50);
     noStroke();
     circle(knobX, 2, this.h * 0.8);
-    // Main white knob
+    
     fill(255);
     circle(knobX, 0, this.h * 0.8);
 
@@ -322,32 +270,30 @@ class ToggleSwitch {
 
   isClicked(mx, my) {
     if (this.hover) {
-      useControllers = !useControllers; // Flip the global switch!
+      useControllers = !useControllers; 
       return true;
     }
     return false;
   }
 }
 
-// --- Custom Button Class ---
 class Button {
   constructor(id, text, x, y, w, h, baseColor, textColor) {
     this.id = id;
     this.text = text;
     this.x = x;
     this.y = y;
-    this.w = w; // Width
-    this.h = h; // Height
+    this.w = w;
+    this.h = h; 
     this.baseColor = color(baseColor);
-    // Here we calculate a slightly darker version of the base color to act as a 3D shadow underneath the button!
     this.shadowColor = color(
       red(this.baseColor) * 0.7,
       green(this.baseColor) * 0.7,
       blue(this.baseColor) * 0.7
     );
     this.textColor = color(textColor);
-    this.hover = false; // Is the mouse currently over this button?
-    this.scale = 1.0; // The visual size multiplier (used for the pop-out animation)
+    this.hover = false; 
+    this.scale = 1.0; 
   }
 
   update(mx, my) {
@@ -370,19 +316,16 @@ class Button {
     translate(this.x, this.y); 
     scale(this.scale); 
 
-    // Draw shadow (bottom layer)
     fill(this.shadowColor);
     noStroke();
     rectMode(CENTER);
     rect(0, 8, this.w, this.h, 15); 
 
-    // Draw main button top layer
     fill(this.baseColor);
     stroke(0);
     strokeWeight(4);
     rect(0, 0, this.w, this.h, 15);
 
-    // Draw text
     fill(this.textColor);
     noStroke();
     textAlign(CENTER, CENTER);
@@ -396,7 +339,6 @@ class Button {
   }
 }
 
-// --- Player Class (Lobby visuals only) ---
 class Player {
   constructor(id, name, offsetX, col) {
     this.id = id; 
@@ -411,16 +353,12 @@ class Player {
     let py = height / 2 + 50 + this.yOffset;
 
     push();
-    // Draw the dark oval shadow on the ground under the character
     fill(0, 0, 0, 100);
     noStroke();
     ellipse(px, height / 2 + 130, 100, 30);
 
-    // Find the loaded image from our brawlerImages dictionary
     let img = brawlerImages[this.name];
     
-    // SAFETY CHECK FIX: Ensure the image successfully loaded and has a real size before drawing!
-    // We check > 10 because broken web links often return a microscopic 1x1 transparent error pixel!
     if (img && img.width > 10 && img.height > 10) { 
       let aspect = img.width / img.height; 
       let drawH = 160; 
@@ -429,8 +367,7 @@ class Player {
       image(img, px, py, drawW, drawH);
     }
 
-    // Draw the character nameplate
-    fill(0, 150); // Semi-transparent black
+    fill(0, 150);
     noStroke();
     rectMode(CORNER);
     rect(
@@ -446,10 +383,9 @@ class Player {
     text(this.name, px, py - 100);
     pop();
 
-    // If this player won the last game, draw a golden crown over their head
     if (lastWinner === this.id) {
       push();
-      fill("#f1c40f"); // Hex code for gold
+      fill("#f1c40f"); 
       stroke(0);
       strokeWeight(2);
       
@@ -471,13 +407,7 @@ class Player {
   }
 }
 
-/* =================================================================================
-           P5.JS CORE FUNCTIONS
-           ================================================================================= */
-
 function preload() {
-  
-  // --- ENVIRONMENT DETECTION FIX ---
   let isPreview = window.location.protocol === 'data:' || window.location.protocol === 'blob:' || window.location.hostname.includes("usercontent.goog");
 
   if (!isPreview) {
@@ -502,7 +432,6 @@ function preload() {
     );
   };
 
-  // Automatically loads local files on GitHub, but safely uses Web URLs in the AI preview window!
   safeLoadImage("./Doug.webp", "https://static.wikia.nocookie.net/brawlstars/images/4/4d/Doug_Skin-Default.png/revision/latest?cb=20260326184421", "Doug");
   safeLoadImage("./Leon.webp", "https://static.wikia.nocookie.net/brawlstars/images/3/33/Leon_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251010150951", "Leon");
   safeLoadImage("./Shelly.webp", "https://static.wikia.nocookie.net/brawlstars/images/5/5e/Shelly_Skin-Default.png/revision/latest/scale-to-width-down/249?cb=20251013023733", "Shelly");
@@ -513,7 +442,9 @@ function preload() {
   safeLoadImage("./Colt.webp", "https://static.wikia.nocookie.net/brawlstars/images/8/8a/Colt_Skin-Default.png/revision/latest?cb=20251013020251", "Colt");
   safeLoadImage("./Mortis.png", "https://static.wikia.nocookie.net/brawlstars/images/b/b2/Mortis_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251020175238", "Mortis");
   safeLoadImage("./Piper.webp", "https://static.wikia.nocookie.net/brawlstars/images/5/5d/Piper_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251018180616", "Piper");
-  safeLoadImage("./shotgun.jpeg", "https://preview.redd.it/i-made-a-model-of-shellys-shotgun-what-do-you-think-v0-fv5pb1m3vkc21.png?width=640&crop=smart&auto=webp&s=b9d0a1ca7ebea77a9410adbb8b2cfd0a66a58d2d", "ShellyWeapon");
+  
+  // FIX: Updated to match your exact file name -> shotgun.png
+  safeLoadImage("./shotgun.png", "https://preview.redd.it/i-made-a-model-of-shellys-shotgun-what-do-you-think-v0-fv5pb1m3vkc21.png?width=640&crop=smart&auto=webp&s=b9d0a1ca7ebea77a9410adbb8b2cfd0a66a58d2d", "ShellyWeapon");
 }
 
 function setup() {
@@ -536,7 +467,6 @@ function setup() {
   gameMusic.loop = true;
   gameMusic.volume = 0.4;
 
-  // NEW: Global click listener to aggressively unlock Chrome's audio blocker
   document.body.addEventListener('click', () => {
     if (gameState === "LOBBY" && lobbyMusic.paused) {
       lobbyMusic.play().catch(e => console.log("Audio waiting for full interaction..."));
@@ -558,27 +488,24 @@ function initScene() {
   let playX = width - playW / 2 - 40;
   let playY = height - playH / 2 - 40;
   
-  // PLAY button
   buttons.push(new Button("play", "PLAY", playX, playY, playW, playH, "#f1c40f", "#ffffff"));
 
-  // The beautifully animated visual Toggle Switch for the Gamepad Mode, positioned tightly above the play button
   controllerSwitch = new ToggleSwitch(playX, playY - playH / 2 - 50, 80, 36, "Controller Mode");
 
   let sideBtnW = min(width * 0.15, 180);
   let sideBtnH = sideBtnW * 0.4;
   
-  // Left and right brawler selection buttons
   buttons.push(new Button("brawlers_left", "BRAWLERS", sideBtnW / 2 + 20, height / 2, sideBtnW, sideBtnH, "#9b59b6", "#ffffff"));
   buttons.push(new Button("brawlers_right", "BRAWLERS", width - sideBtnW / 2 - 20, height / 2, sideBtnW, sideBtnH, "#2ecc71", "#ffffff"));
 }
 
 function initMap() {
   walls = []; 
-  walls.push({ x: width / 2 - 40, y: height / 2 - 100, w: 80, h: 200 }); // Center block
-  walls.push({ x: width / 2 - 150, y: height * 0.15, w: 300, h: 60 });   // Top cover
-  walls.push({ x: width / 2 - 150, y: height * 0.85 - 60, w: 300, h: 60 }); // Bottom cover
-  walls.push({ x: width * 0.2, y: height * 0.3, w: 60, h: 250 });        // Left cover
-  walls.push({ x: width * 0.8 - 60, y: height * 0.4, w: 60, h: 250 });   // Right cover
+  walls.push({ x: width / 2 - 40, y: height / 2 - 100, w: 80, h: 200 }); 
+  walls.push({ x: width / 2 - 150, y: height * 0.15, w: 300, h: 60 });   
+  walls.push({ x: width / 2 - 150, y: height * 0.85 - 60, w: 300, h: 60 }); 
+  walls.push({ x: width * 0.2, y: height * 0.3, w: 60, h: 250 });        
+  walls.push({ x: width * 0.8 - 60, y: height * 0.4, w: 60, h: 250 });   
 }
 
 function initGame() {
@@ -612,7 +539,6 @@ function startNextRound() {
   puddles = [];
   dougSplashes = [];
 
-  // Reset Blue properties
   bluePlayer.x = width * 0.1; 
   bluePlayer.y = height / 2;  
   bluePlayer.hp = bluePlayer.maxHp; 
@@ -630,7 +556,6 @@ function startNextRound() {
   bluePlayer.invisTicks = 0;
   bluePlayer.hotdogTicks = 0;
 
-  // Reset Red properties
   redPlayer.x = width * 0.9; 
   redPlayer.y = height / 2;
   redPlayer.hp = redPlayer.maxHp;
@@ -648,10 +573,6 @@ function startNextRound() {
   redPlayer.invisTicks = 0;
   redPlayer.hotdogTicks = 0;
 }
-
-/* =================================================================================
-           COLLISION & PHYSICS LOGIC
-           ================================================================================= */
 
 function checkWallCollision(px, py, radius) {
   for (let w of walls) {
@@ -697,10 +618,6 @@ function resolveWallStuck(player) {
   }
 }
 
-/* =================================================================================
-           COMBAT & ABILITY LOGIC
-           ================================================================================= */
-
 function shootProjectile(shooter, target, isSuper = false, overrideAngle = null) {
   if (shooter.cooldown > 0 || shooter.stunTicks > 0) return; 
 
@@ -724,7 +641,6 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     shooter.invisTicks = 0;
   }
 
-  // --- Targeting Math (Gamepad Override Support) ---
   let angle;
   if (overrideAngle !== null) {
     angle = overrideAngle;
@@ -734,7 +650,6 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     angle = atan2(target.y - shooter.y, target.x - shooter.x);
   }
 
-  // --- Doug Attack & Super ---
   if (shooter.brawler === "Doug") {
     if (isSuper) {
       shooter.hotdogTicks = 900; 
@@ -759,7 +674,6 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     return; 
   }
 
-  // --- Barley Super ---
   if (shooter.brawler === "Barley" && isSuper) {
     let cx = shooter.x + cos(angle) * BRAWLER_STATS["Barley"].range;
     let cy = shooter.y + sin(angle) * BRAWLER_STATS["Barley"].range;
@@ -783,7 +697,6 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     return; 
   }
 
-  // --- Leon Super ---
   if (shooter.brawler === "Leon" && isSuper) {
     shooter.isInvisible = true;
     shooter.invisTicks = 360; 
@@ -791,7 +704,6 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     return; 
   }
 
-  // --- Piper Super ---
   if (shooter.brawler === "Piper" && isSuper) {
     let jumpAngle = angle + PI;
     shooter.jumpTicks = 45; 
@@ -811,7 +723,6 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     return;
   }
 
-  // --- Edgar Super ---
   if (shooter.brawler === "Edgar" && isSuper) {
     let jumpAngle = angle;
     shooter.jumpTicks = 45;
@@ -822,7 +733,6 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     return;
   }
 
-  // --- Mortis Dash & Super ---
   if (shooter.brawler === "Mortis") {
     if (isSuper) {
       projectiles.push({
@@ -843,7 +753,6 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     return; 
   }
 
-  // --- Frank Windup ---
   if (shooter.brawler === "Frank") {
     let hpRatio = Math.max(0.1, shooter.hp / shooter.maxHp);
     shooter.attackWindup = floor(10 + 40 * hpRatio); 
@@ -853,7 +762,6 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     return; 
   }
 
-  // --- Leon Sequential Firing ---
   if (shooter.brawler === "Leon") {
     let projCount = BRAWLER_STATS["Leon"].projectiles;
     if (isSuper) projCount *= 2;
@@ -865,7 +773,6 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     return; 
   }
 
-  // --- Edgar Sequential Firing ---
   if (shooter.brawler === "Edgar" && !isSuper) {
     shooter.edgarShots = BRAWLER_STATS["Edgar"].projectiles;
     shooter.edgarTimer = 0;
@@ -874,7 +781,6 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     return;
   }
 
-  // --- STANDARD PROJECTILES ---
   let ignoresWalls = ["Doug", "Dynamike", "Barley"].includes(shooter.brawler) || (shooter.brawler === "Colt" && isSuper);
   let projCount = isSuper ? BRAWLER_STATS[shooter.brawler].superProjectiles : BRAWLER_STATS[shooter.brawler].projectiles;
 
@@ -986,10 +892,6 @@ function fireEdgarPunch(edgar) {
   });
 }
 
-/* =================================================================================
-           VISUAL RENDERING LOGIC
-           ================================================================================= */
-
 function drawWeapon(player, angle) {
   push();
   translate(player.x, player.y);
@@ -998,7 +900,6 @@ function drawWeapon(player, angle) {
   switch (player.brawler) {
     case "Shelly":
       let wImg = brawlerImages["ShellyWeapon"];
-      // FIX: Check > 10 pixels to prevent drawing invisible 1x1 "Error" pixels if the image link dies!
       if (wImg && wImg.width > 10 && wImg.height > 10) {
         let aspect = wImg.width / wImg.height;
         let drawH = 25;
@@ -1013,11 +914,10 @@ function drawWeapon(player, angle) {
         image(wImg, 0, 0, drawW, drawH);
         pop();
       } else {
-        // Enhanced fallback visual so you don't fight empty-handed!
         fill(100);
-        rect(15, -4, 35, 8); // Grey barrel
+        rect(15, -4, 35, 8); 
         fill("#8B4513");
-        rect(5, -4, 15, 10); // Brown stock
+        rect(5, -4, 15, 10); 
       }
       break;
     case "Colt":
@@ -1121,22 +1021,19 @@ function drawLobby() {
 
   drawMenus();
 
-  // --- Draw Lifetime Stats ---
   push();
-  // Player 1 Stats Background (Top Left)
-  fill(0, 0, 0, 150); // Somewhat transparent black box
+  fill(0, 0, 0, 150); 
   rectMode(CORNER);
-  rect(20, 20, 280, 80, 10); // Rounded corners
+  rect(20, 20, 280, 80, 10); 
 
-  fill("#f1c40f"); // Gold color
+  fill("#f1c40f"); 
   textSize(30);
   textAlign(LEFT, TOP);
   text(`P1 WINS: ${blueTotalWins}`, 30, 30);
-  fill(255); // White color
+  fill(255); 
   textSize(20);
   text(`TOTAL DMG: ${Math.floor(blueTotalDamage)}`, 30, 65);
 
-  // Player 2 Stats Background (Top Right)
   fill(0, 0, 0, 150); 
   rectMode(CORNER);
   rect(width - 300, 20, 280, 80, 10); 
@@ -1151,9 +1048,6 @@ function drawLobby() {
   pop();
 }
 
-// ================================================================================
-// MAIN GAME ENGINE LOOP
-// ================================================================================
 function drawGame() {
   background("#e6cc98"); 
 
@@ -1224,12 +1118,10 @@ function drawGame() {
     if (redPlayer.invisTicks <= 0) redPlayer.isInvisible = false;
   }
 
-  // --- Movement Logic ---
   let bRad = bluePlayer.r / 2;
   let rRad = redPlayer.r / 2;
   let nextX, nextY; 
 
-  // -- Blue Player Handling --
   if (bluePlayer.stunTicks > 0) {
     bluePlayer.stunTicks--;
     if (!bluePlayer.isInvisible) {
@@ -1239,7 +1131,6 @@ function drawGame() {
       text("★", bluePlayer.x, bluePlayer.y - bluePlayer.r - 20);
     }
   } else if (bluePlayer.attackWindup > 0) {
-    // Immobilized
   } else if (bluePlayer.jumpTicks > 0) {
     bluePlayer.jumpTicks--;
     bluePlayer.x += bluePlayer.jumpVx;
@@ -1271,17 +1162,16 @@ function drawGame() {
       if (Math.abs(gp.axes[3]) > 0.2) nextY += gp.axes[3] * bluePlayer.speed;
       if (Math.abs(gp.axes[2]) > 0.2) nextX += gp.axes[2] * bluePlayer.speed;
     } else {
-      if (keyIsDown(87)) nextY -= bluePlayer.speed; // W 
-      if (keyIsDown(83)) nextY += bluePlayer.speed; // S
-      if (keyIsDown(65)) nextX -= bluePlayer.speed; // A
-      if (keyIsDown(68)) nextX += bluePlayer.speed; // D
+      if (keyIsDown(87)) nextY -= bluePlayer.speed; 
+      if (keyIsDown(83)) nextY += bluePlayer.speed; 
+      if (keyIsDown(65)) nextX -= bluePlayer.speed; 
+      if (keyIsDown(68)) nextX += bluePlayer.speed; 
     }
 
     if (!checkWallCollision(bluePlayer.x, nextY, bRad)) bluePlayer.y = nextY;
     if (!checkWallCollision(nextX, bluePlayer.y, bRad)) bluePlayer.x = nextX;
   }
 
-  // -- Red Player Handling -- 
   if (redPlayer.stunTicks > 0) {
     redPlayer.stunTicks--;
     if (!redPlayer.isInvisible) {
@@ -1291,7 +1181,6 @@ function drawGame() {
       text("★", redPlayer.x, redPlayer.y - redPlayer.r - 20);
     }
   } else if (redPlayer.attackWindup > 0) {
-    // Immobilized
   } else if (redPlayer.jumpTicks > 0) {
     redPlayer.jumpTicks--;
     redPlayer.x += redPlayer.jumpVx;
@@ -1338,10 +1227,8 @@ function drawGame() {
   redPlayer.x = constrain(redPlayer.x, rRad, width - rRad);
   redPlayer.y = constrain(redPlayer.y, rRad, height - rRad);
 
-  // --- Shooting Input Checks ---
   let gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
 
-  // Blue Player Inputs
   if (useControllers && gamepads[0]) {
     let gp = gamepads[0];
     let isAiming = Math.abs(gp.axes[0]) > 0.2 || Math.abs(gp.axes[1]) > 0.2;
@@ -1354,7 +1241,6 @@ function drawGame() {
     if (keyIsDown(81)) shootProjectile(bluePlayer, redPlayer, true);  
   }
 
-  // Red Player Inputs
   if (useControllers && gamepads[1]) {
     let gp = gamepads[1];
     let isAiming = Math.abs(gp.axes[0]) > 0.2 || Math.abs(gp.axes[1]) > 0.2;
@@ -1620,13 +1506,11 @@ function drawGame() {
     }
   }
 
-  // --- Draw Players ---
   noStroke();
 
   let blueAngle = atan2(redPlayer.y - bluePlayer.y, redPlayer.x - bluePlayer.x);
   let redAngle = atan2(bluePlayer.y - redPlayer.y, bluePlayer.x - redPlayer.x);
 
-  // Blue Player Visuals
   if (bluePlayer.hp > 0 && !bluePlayer.isInvisible) {
     if (bluePlayer.hits >= BRAWLER_STATS[bluePlayer.brawler].hitsToSuper) {
       noFill();
@@ -1654,7 +1538,6 @@ function drawGame() {
     }
   }
 
-  // Red Player Visuals
   if (redPlayer.hp > 0 && !redPlayer.isInvisible) {
     if (redPlayer.hits >= BRAWLER_STATS[redPlayer.brawler].hitsToSuper) {
       noFill();
@@ -1682,7 +1565,6 @@ function drawGame() {
     }
   }
 
-  // --- Draw Health Bars & Ammo Bars ---
   let barW = 60; 
   let barH = 10;
   rectMode(CENTER);
@@ -1775,7 +1657,6 @@ function drawGame() {
     }
   }
 
-  // --- Draw Screen Edge HUD (Stats Displays) ---
   rectMode(CORNER);
 
   fill(0, 150);
@@ -1860,10 +1741,6 @@ function drawGame() {
     }
   }
 }
-
-/* =================================================================================
-   OPTIMIZATION & CACHING
-   ================================================================================= */
 
 function renderStaticBackground() {
   bgGraphics.background("#1a2a6c");
