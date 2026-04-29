@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BrawlStars 2.0</title>
     
-    <!-- NEW: Browser Tab Icon (Favicon) -->
-    <link rel="icon" type="image/png" href="BrawlTard.png">
+    <link rel="icon" type="image/png" href="./Logo.png">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,6 +33,7 @@ let lobbyMusic;
 let gameMusic;
 let customFont;
 let controllerSwitch;
+let cpuSwitch;
 
 let brawlerList = [
   "Shelly",
@@ -54,7 +54,11 @@ let rightMenuOpen = false;
 let brawlerImages = {}; 
 let bgGraphics; 
 
-let gameState = "LOBBY";
+let gameState = "SPLASH"; // START IN SPLASH MODE
+let loadedAssets = 0; // Tracks downloaded images
+let totalAssets = 0; 
+let splashStartBtn;
+
 let lastWinner = null; 
 let blueWins = 0; 
 let redWins = 0; 
@@ -62,46 +66,13 @@ let blueTotalWins = 0;
 let redTotalWins = 0;  
 let blueTotalDamage = 0; 
 let redTotalDamage = 0;  
+
 let useControllers = false; 
+let cpuMode = false;
 let showLobbyTitle = true;
 
-let bluePlayer = {
-  id: "blue",
-  x: 0,
-  y: 0,
-  r: 35,
-  speed: 5,
-  cooldown: 0,
-  maxCooldown: 30,
-  hits: 0,
-  ammo: 3,
-  reloadTimer: 0,
-  lastCombatTime: 0,
-  dashTicks: 0,
-  dashVx: 0,
-  dashVy: 0,
-  hasDamagedInDash: false,
-  damageDealt: 0,
-};
-
-let redPlayer = {
-  id: "red",
-  x: 0,
-  y: 0,
-  r: 35,
-  speed: 5,
-  cooldown: 0,
-  maxCooldown: 30,
-  hits: 0,
-  ammo: 3,
-  reloadTimer: 0,
-  lastCombatTime: 0,
-  dashTicks: 0,
-  dashVx: 0,
-  dashVy: 0,
-  hasDamagedInDash: false,
-  damageDealt: 0,
-};
+let activePlayers = [];
+let roundStartFrame = 0;
 
 let walls = [];
 let projectiles = [];
@@ -111,394 +82,165 @@ let puddles = [];
 let dougSplashes = [];
 
 const BRAWLER_STATS = {
-  Frank: {
-    hp: 13400,
-    damage: 2480,
-    superDesc: "Stunning Blow: 2.48s Stun",
-    hitsToSuper: 3,
-    projectiles: 1,
-    superProjectiles: 1,
-    range: 160,
-    superRange: 250,
-    reloadTime: 48,
-  }, 
-  Piper: {
-    hp: 4800,
-    damage: 3400,
-    superDesc: "Poppin': Jump + 4 Grenades",
-    hitsToSuper: 3,
-    projectiles: 1,
-    superProjectiles: 4,
-    range: 700,
-    reloadTime: 138,
-  }, 
-  Dynamike: {
-    hp: 5600,
-    damage: 1600,
-    superDesc: "Big Barrel o' Boom: 4,400 dmg",
-    hitsToSuper: 4,
-    projectiles: 2,
-    superProjectiles: 1,
-    range: 350,
-    reloadTime: 102,
-  }, 
-  Mortis: {
-    hp: 7600,
-    damage: 1880,
-    superDesc: "Life Blood: 1,800 dmg + Heal",
-    hitsToSuper: 5,
-    projectiles: 0,
-    superProjectiles: 1,
-    range: 200,
-    reloadTime: 144,
-  }, 
-  Doug: {
-    hp: 10000,
-    damage: 2400,
-    superDesc: "Second Serving: Revive Ally",
-    hitsToSuper: 3,
-    projectiles: 1,
-    superProjectiles: 1,
-    range: 250,
-    reloadTime: 90,
-  }, 
-  Barley: {
-    hp: 4800,
-    damage: 1600,
-    superDesc: "Last Call: AoE Fire Puddles",
-    hitsToSuper: 5,
-    projectiles: 1,
-    superProjectiles: 5,
-    range: 450,
-    reloadTime: 120,
-  }, 
-  Leon: {
-    hp: 6400,
-    damage: 960,
-    superDesc: "Smoke Bomb: Invisibility",
-    hitsToSuper: 9,
-    projectiles: 4,
-    superProjectiles: 0,
-    range: 500,
-    reloadTime: 114,
-  }, 
-  Shelly: {
-    hp: 7400,
-    damage: 600,
-    superDesc: "Super Shell: Knockback/Dmg",
-    hitsToSuper: 10,
-    projectiles: 5,
-    superProjectiles: 9,
-    range: 400,
-    reloadTime: 90,
-  }, 
-  Colt: {
-    hp: 5600,
-    damage: 720,
-    superDesc: "Bullet Storm: 12 Bullets",
-    hitsToSuper: 12,
-    projectiles: 6,
-    superProjectiles: 12,
-    range: 550,
-    reloadTime: 102,
-  }, 
-  Edgar: {
-    hp: 6600,
-    damage: 1080,
-    superDesc: "Vault: Jump + Speed Boost",
-    hitsToSuper: 12,
-    projectiles: 2,
-    superProjectiles: 0,
-    range: 150,
-    reloadTime: 42,
-  }, 
+  Frank: { hp: 13400, damage: 2480, superDesc: "Stunning Blow: 2.48s Stun", hitsToSuper: 3, projectiles: 1, superProjectiles: 1, range: 160, superRange: 250, reloadTime: 48 }, 
+  Piper: { hp: 4800, damage: 3400, superDesc: "Poppin': Jump + 4 Grenades", hitsToSuper: 3, projectiles: 1, superProjectiles: 4, range: 700, reloadTime: 138 }, 
+  Dynamike: { hp: 5600, damage: 1600, superDesc: "Big Barrel o' Boom: 4,400 dmg", hitsToSuper: 4, projectiles: 2, superProjectiles: 1, range: 350, reloadTime: 102 }, 
+  Mortis: { hp: 7600, damage: 1880, superDesc: "Life Blood: 1,800 dmg + Heal", hitsToSuper: 5, projectiles: 0, superProjectiles: 1, range: 200, reloadTime: 144 }, 
+  Doug: { hp: 10000, damage: 2400, superDesc: "Second Serving: Revive Ally", hitsToSuper: 3, projectiles: 1, superProjectiles: 1, range: 250, reloadTime: 90 }, 
+  Barley: { hp: 4800, damage: 1600, superDesc: "Last Call: AoE Fire Puddles", hitsToSuper: 5, projectiles: 1, superProjectiles: 5, range: 450, reloadTime: 120 }, 
+  Leon: { hp: 6400, damage: 960, superDesc: "Smoke Bomb: Invisibility", hitsToSuper: 9, projectiles: 4, superProjectiles: 0, range: 500, reloadTime: 114 }, 
+  Shelly: { hp: 7400, damage: 600, superDesc: "Super Shell: Knockback/Dmg", hitsToSuper: 10, projectiles: 5, superProjectiles: 9, range: 400, reloadTime: 90 }, 
+  Colt: { hp: 5600, damage: 720, superDesc: "Bullet Storm: 12 Bullets", hitsToSuper: 12, projectiles: 6, superProjectiles: 12, range: 550, reloadTime: 102 }, 
+  Edgar: { hp: 6600, damage: 1080, superDesc: "Vault: Jump + Speed Boost", hitsToSuper: 12, projectiles: 2, superProjectiles: 0, range: 150, reloadTime: 42 }, 
 };
 
 class ToggleSwitch {
-  constructor(x, y, w, h, label) {
-    this.x = x;
-    this.y = y;
-    this.w = w;
-    this.h = h;
-    this.label = label;
-    this.hover = false;
-    this.knobPos = useControllers ? 1 : 0;
+  constructor(x, y, w, h, label, initialState, onToggleCallback) {
+    this.x = x; this.y = y; this.w = w; this.h = h; this.label = label;
+    this.hover = false; this.state = initialState; this.knobPos = this.state ? 1 : 0;
+    this.onToggle = onToggleCallback;
   }
-
   update(mx, my) {
-    if (mx > this.x - this.w / 2 && mx < this.x + this.w / 2 && my > this.y - this.h / 2 && my < this.y + this.h / 2) {
-      this.hover = true;
-    } else {
-      this.hover = false;
-    }
-
-    let target = useControllers ? 1 : 0;
-    this.knobPos = lerp(this.knobPos, target, 0.2);
+    this.hover = (mx > this.x - this.w / 2 && mx < this.x + this.w / 2 && my > this.y - this.h / 2 && my < this.y + this.h / 2);
+    this.knobPos = lerp(this.knobPos, this.state ? 1 : 0, 0.2);
   }
-
   draw() {
-    push();
-    translate(this.x, this.y);
-
-    fill(255);
-    noStroke();
-    textAlign(CENTER, BOTTOM);
-    textSize(20);
-    text(this.label, 0, -this.h / 2 - 5);
-
+    push(); translate(this.x, this.y);
+    fill(255); noStroke(); textAlign(CENTER, BOTTOM); textSize(20); text(this.label, 0, -this.h / 2 - 5);
     let bgCol = lerpColor(color("#34495e"), color("#e74c3c"), this.knobPos);
     fill(bgCol);
-    
-    if (this.hover) {
-      stroke(255, 255, 255, 100);
-      strokeWeight(3);
-    } else {
-      noStroke();
-    }
-    
-    rectMode(CENTER);
-    rect(0, 0, this.w, this.h, this.h); 
-
+    if (this.hover) { stroke(255, 255, 255, 100); strokeWeight(3); } else { noStroke(); }
+    rectMode(CENTER); rect(0, 0, this.w, this.h, this.h); 
     let knobTravel = this.w - this.h; 
     let knobX = map(this.knobPos, 0, 1, -knobTravel / 2, knobTravel / 2);
-    
-    fill(0, 50);
-    noStroke();
-    circle(knobX, 2, this.h * 0.8);
-    
-    fill(255);
-    circle(knobX, 0, this.h * 0.8);
-
+    fill(0, 50); noStroke(); circle(knobX, 2, this.h * 0.8);
+    fill(255); circle(knobX, 0, this.h * 0.8);
     pop();
   }
-
-  isClicked(mx, my) {
-    if (this.hover) {
-      useControllers = !useControllers; 
-      return true;
-    }
+  isClicked() {
+    if (this.hover) { this.state = !this.state; if (this.onToggle) this.onToggle(this.state); return true; }
     return false;
   }
 }
 
 class Button {
   constructor(id, text, x, y, w, h, baseColor, textColor) {
-    this.id = id;
-    this.text = text;
-    this.x = x;
-    this.y = y;
-    this.w = w;
-    this.h = h; 
+    this.id = id; this.text = text; this.x = x; this.y = y; this.w = w; this.h = h; 
     this.baseColor = color(baseColor);
-    this.shadowColor = color(
-      red(this.baseColor) * 0.7,
-      green(this.baseColor) * 0.7,
-      blue(this.baseColor) * 0.7
-    );
-    this.textColor = color(textColor);
-    this.hover = false; 
-    this.scale = 1.0; 
+    this.shadowColor = color(red(this.baseColor) * 0.7, green(this.baseColor) * 0.7, blue(this.baseColor) * 0.7);
+    this.textColor = color(textColor); this.hover = false; this.scale = 1.0; 
   }
-
   update(mx, my) {
-    if (
-      mx > this.x - this.w / 2 &&
-      mx < this.x + this.w / 2 &&
-      my > this.y - this.h / 2 &&
-      my < this.y + this.h / 2
-    ) {
-      this.hover = true;
-      this.scale = lerp(this.scale, 1.1, 0.2);
-    } else {
-      this.hover = false;
-      this.scale = lerp(this.scale, 1.0, 0.2); 
-    }
+    this.hover = (mx > this.x - this.w / 2 && mx < this.x + this.w / 2 && my > this.y - this.h / 2 && my < this.y + this.h / 2);
+    this.scale = lerp(this.scale, this.hover ? 1.1 : 1.0, 0.2);
   }
-
   draw() {
-    push();
-    translate(this.x, this.y); 
-    scale(this.scale); 
-
-    fill(this.shadowColor);
-    noStroke();
-    rectMode(CENTER);
-    rect(0, 8, this.w, this.h, 15); 
-
-    fill(this.baseColor);
-    stroke(0);
-    strokeWeight(4);
-    rect(0, 0, this.w, this.h, 15);
-
-    fill(this.textColor);
-    noStroke();
-    textAlign(CENTER, CENTER);
-    textSize(this.h * 0.45);
-    text(this.text, 0, -this.h * 0.05); 
+    push(); translate(this.x, this.y); scale(this.scale); 
+    fill(this.shadowColor); noStroke(); rectMode(CENTER); rect(0, 8, this.w, this.h, 15); 
+    fill(this.baseColor); stroke(0); strokeWeight(4); rect(0, 0, this.w, this.h, 15);
+    fill(this.textColor); noStroke(); textAlign(CENTER, CENTER); textSize(this.h * 0.45); text(this.text, 0, -this.h * 0.05); 
     pop(); 
   }
-
-  isClicked(mx, my) {
-    return this.hover; 
-  }
+  isClicked() { return this.hover; }
 }
 
 class Player {
   constructor(id, name, offsetX, col) {
-    this.id = id; 
-    this.name = name; 
-    this.offsetX = offsetX; 
-    this.color = color(col);
-    this.yOffset = 0; 
+    this.id = id; this.name = name; this.offsetX = offsetX; this.color = color(col); this.yOffset = 0; 
   }
-
   draw() {
-    let px = width / 2 + this.offsetX;
-    let py = height / 2 + 50 + this.yOffset;
-
-    push();
-    fill(0, 0, 0, 100);
-    noStroke();
-    ellipse(px, height / 2 + 130, 100, 30);
-
+    let px = width / 2 + this.offsetX; let py = height / 2 + 50 + this.yOffset;
+    push(); fill(0, 0, 0, 100); noStroke(); ellipse(px, height / 2 + 130, 100, 30);
     let img = brawlerImages[this.name];
-    
     if (img && img.width > 10 && img.height > 10) { 
-      let aspect = img.width / img.height; 
-      let drawH = 160; 
-      let drawW = drawH * aspect; 
-      imageMode(CENTER);
-      image(img, px, py, drawW, drawH);
+      let drawH = 160; let drawW = drawH * (img.width / img.height); 
+      imageMode(CENTER); image(img, px, py, drawW, drawH);
     }
-
-    fill(0, 150);
-    noStroke();
-    rectMode(CORNER);
-    rect(
-      px - textWidth(this.name) / 2 - 10,
-      py - 115,
-      textWidth(this.name) + 20,
-      30,
-      5
-    );
-    fill(255);
-    textAlign(CENTER, CENTER);
-    textSize(20);
-    text(this.name, px, py - 100);
+    fill(0, 150); noStroke(); rectMode(CORNER);
+    rect(px - textWidth(this.name) / 2 - 10, py - 115, textWidth(this.name) + 20, 30, 5);
+    fill(255); textAlign(CENTER, CENTER); textSize(20); text(this.name, px, py - 100);
     pop();
-
     if (lastWinner === this.id) {
-      push();
-      fill("#f1c40f"); 
-      stroke(0);
-      strokeWeight(2);
-      
-      beginShape();
-      vertex(px - 20, py - 130); 
-      vertex(px - 25, py - 160); 
-      vertex(px - 10, py - 145); 
-      vertex(px, py - 165);      
-      vertex(px + 10, py - 145); 
-      vertex(px + 25, py - 160); 
-      vertex(px + 20, py - 130); 
-      endShape(CLOSE); 
-      pop();
+      push(); fill("#f1c40f"); stroke(0); strokeWeight(2);
+      beginShape(); vertex(px - 20, py - 130); vertex(px - 25, py - 160); vertex(px - 10, py - 145); 
+      vertex(px, py - 165); vertex(px + 10, py - 145); vertex(px + 25, py - 160); vertex(px + 20, py - 130); 
+      endShape(CLOSE); pop();
     }
   }
-
-  update() {
-    this.yOffset = sin(frameCount * 0.05 + this.offsetX) * 5;
-  }
+  update() { this.yOffset = sin(frameCount * 0.05 + this.offsetX) * 5; }
 }
 
 function preload() {
-  let isPreview = window.location.protocol === 'data:' || window.location.protocol === 'blob:' || window.location.hostname.includes("usercontent.goog");
-
-  if (!isPreview) {
-    loadFont('./LilitaOne.ttf', 
-      (f) => { customFont = f; }, 
-      (e) => { console.warn("Local font missing, falling back to web font."); }
-    );
-  }
-  
-  const safeLoadImage = (localPath, webUrl, name) => {
-    let urlToUse = isPreview ? webUrl : localPath;
-    
-    loadImage(
-      urlToUse,
-      (img) => { brawlerImages[name] = img; },
-      (err) => { 
-        console.warn(`Failed to load local file for ${name}, trying web URL...`); 
-        if (!isPreview) {
-          loadImage(webUrl, (img) => { brawlerImages[name] = img; });
-        }
-      }
-    );
-  };
-
-  safeLoadImage("./Doug.webp", "https://static.wikia.nocookie.net/brawlstars/images/4/4d/Doug_Skin-Default.png/revision/latest?cb=20260326184421", "Doug");
-  safeLoadImage("./Leon.webp", "https://static.wikia.nocookie.net/brawlstars/images/3/33/Leon_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251010150951", "Leon");
-  safeLoadImage("./Shelly.webp", "https://static.wikia.nocookie.net/brawlstars/images/5/5e/Shelly_Skin-Default.png/revision/latest/scale-to-width-down/249?cb=20251013023733", "Shelly");
-  safeLoadImage("./Frank.webp", "https://static.wikia.nocookie.net/brawlstars/images/5/55/Frank_Skin-Default.png/revision/latest?cb=20250208034133", "Frank");
-  safeLoadImage("./edgar.gif", "https://media.tenor.com/fy_w5CJQ5R0AAAAj/brawl-stars-brawl-stars-meme.gif", "Edgar"); 
-  safeLoadImage("./Barley.webp", "https://static.wikia.nocookie.net/vsbattles/images/5/59/Barley_Skin-Default.webp/revision/latest?cb=20230714220010", "Barley");
-  safeLoadImage("./Dynamike.webp", "https://static.wikia.nocookie.net/brawlstars/images/6/6e/Dynamike_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20250913230712", "Dynamike");
-  safeLoadImage("./Colt.webp", "https://static.wikia.nocookie.net/brawlstars/images/8/8a/Colt_Skin-Default.png/revision/latest?cb=20251013020251", "Colt");
-  safeLoadImage("./Mortis.png", "https://static.wikia.nocookie.net/brawlstars/images/b/b2/Mortis_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251020175238", "Mortis");
-  safeLoadImage("./Piper.webp", "https://static.wikia.nocookie.net/brawlstars/images/5/5d/Piper_Skin-Default.png/revision/latest/scale-to-width-down/1200?cb=20251018180616", "Piper");
-  
-  // FIX: Updated to match your exact file name -> shotgun.png
-  safeLoadImage("./shotgun.png", "https://preview.redd.it/i-made-a-model-of-shellys-shotgun-what-do-you-think-v0-fv5pb1m3vkc21.png?width=640&crop=smart&auto=webp&s=b9d0a1ca7ebea77a9410adbb8b2cfd0a66a58d2d", "ShellyWeapon");
+  // Load ONLY the splash screen assets here to prevent black screen lag
+  loadFont('./LilitaOne.ttf', (f) => { customFont = f; });
+  loadImage('./Logo.png', (img) => { brawlerImages["Logo"] = img; });
 }
 
-function setup() {
-  createCanvas(windowWidth, windowHeight);
+// NEW: Asynchronously load all heavy character assets AFTER the user clicks start!
+function beginLoadingAssets() {
+  let toLoad = [
+    {name: "Doug", path: "./Doug.webp"},
+    {name: "Leon", path: "./Leon.webp"},
+    {name: "Shelly", path: "./Shelly.webp"},
+    {name: "Frank", path: "./Frank.webp"},
+    {name: "Edgar", path: "./edgar.gif"},
+    {name: "Barley", path: "./Barley.webp"},
+    {name: "Dynamike", path: "./Dynamike.webp"},
+    {name: "Colt", path: "./Colt.webp"},
+    {name: "Mortis", path: "./Mortis.png"},
+    {name: "Piper", path: "./Piper.webp"},
+    {name: "ShellyWeapon", path: "./shotgun.png"}
+  ];
+  totalAssets = toLoad.length;
+  loadedAssets = 0;
   
-  if (customFont) {
-    textFont(customFont); 
-  } else {
-    textFont('Lilita One'); 
+  for(let item of toLoad) {
+    loadImage(item.path, (img) => {
+      brawlerImages[item.name] = img;
+      loadedAssets++;
+    }, (err) => {
+      console.warn("Failed to load local file: " + item.path);
+      loadedAssets++; // Fail gracefully to prevent infinite loading screens
+    });
   }
+}
+
+// OPTIMIZATION: Disables p5.js validation checks which dramatically boosts performance!
+p5.disableFriendlyErrors = true;
+
+function setup() {
+  // OPTIMIZATION: explicitly telling the browser the canvas does not use transparency (alpha: false) significantly speeds up 2D rendering.
+  setAttributes('alpha', false);
+  createCanvas(windowWidth, windowHeight, P2D);
+  frameRate(60); // OPTIMIZATION: Hard limit to 60fps so high-refresh monitors don't overload math checks!
+  
+  if (customFont) textFont(customFont); 
+  else textFont('Lilita One'); 
 
   bgGraphics = createGraphics(windowWidth, windowHeight);
   renderStaticBackground();
 
-  lobbyMusic = new Audio("https://files.catbox.moe/re03vh.mp3");
-  lobbyMusic.loop = true; 
-  lobbyMusic.volume = 0.4; 
-
-  gameMusic = new Audio("https://files.catbox.moe/pswebv.mp3");
-  gameMusic.loop = true;
-  gameMusic.volume = 0.4;
-
-  document.body.addEventListener('click', () => {
-    if (gameState === "LOBBY" && lobbyMusic.paused) {
-      lobbyMusic.play().catch(e => console.log("Audio waiting for full interaction..."));
-    }
-  });
+  lobbyMusic = new Audio("https://files.catbox.moe/re03vh.mp3"); lobbyMusic.loop = true; lobbyMusic.volume = 0.4; 
+  gameMusic = new Audio("https://files.catbox.moe/pswebv.mp3"); gameMusic.loop = true; gameMusic.volume = 0.4;
 
   initScene();
 }
 
 function initScene() {
-  buttons = []; 
-  players = []; 
-  
+  buttons = []; players = []; 
   players.push(new Player("blue", "Shelly", -100, "#3498db"));
   players.push(new Player("red", "Shelly", 100, "#e74c3c"));
 
-  let playW = min(width * 0.25, 250);
-  let playH = playW * 0.35;
-  let playX = width - playW / 2 - 40;
-  let playY = height - playH / 2 - 40;
+  let playW = min(width * 0.25, 250); let playH = playW * 0.35;
+  let playX = width - playW / 2 - 40; let playY = height - playH / 2 - 40;
   
   buttons.push(new Button("play", "PLAY", playX, playY, playW, playH, "#f1c40f", "#ffffff"));
+  controllerSwitch = new ToggleSwitch(playX, playY - playH / 2 - 50, 80, 36, "Controller Mode", useControllers, (val) => useControllers = val);
 
-  controllerSwitch = new ToggleSwitch(playX, playY - playH / 2 - 50, 80, 36, "Controller Mode");
+  buttons.push(new Button("mode_select", "MODE: KNOCKOUT", 150, height - 50, 220, 50, "#e67e22", "#ffffff"));
+  cpuSwitch = new ToggleSwitch(150, height - 130, 80, 36, "CPU MATCH (3v3)", cpuMode, (val) => cpuMode = val);
 
-  let sideBtnW = min(width * 0.15, 180);
-  let sideBtnH = sideBtnW * 0.4;
-  
+  let sideBtnW = min(width * 0.15, 180); let sideBtnH = sideBtnW * 0.4;
   buttons.push(new Button("brawlers_left", "BRAWLERS", sideBtnW / 2 + 20, height / 2, sideBtnW, sideBtnH, "#9b59b6", "#ffffff"));
   buttons.push(new Button("brawlers_right", "BRAWLERS", width - sideBtnW / 2 - 20, height / 2, sideBtnW, sideBtnH, "#2ecc71", "#ffffff"));
 }
@@ -512,185 +254,152 @@ function initMap() {
   walls.push({ x: width * 0.8 - 60, y: height * 0.4, w: 60, h: 250 });   
 }
 
+function getRandomBrawler(excludeList) {
+  let available = brawlerList.filter(b => !excludeList.includes(b));
+  return available.length === 0 ? brawlerList[0] : available[Math.floor(Math.random() * available.length)];
+}
+
+function createPlayerObject(id, team, brawlerName, isBot) {
+  let stats = BRAWLER_STATS[brawlerName];
+  return {
+    id: id, team: team, brawler: brawlerName, isBot: isBot,
+    x: 0, y: 0, r: 35, speed: isBot ? 3.5 : 4, cooldown: 0, maxCooldown: 30, 
+    hits: 0, ammo: 3, reloadTimer: 0, lastCombatTime: 0, dashTicks: 0, dashVx: 0, dashVy: 0, hasDamagedInDash: false,
+    hp: stats.hp, maxHp: stats.hp, damage: stats.damage, superDesc: stats.superDesc,
+    stunTicks: 0, attackWindup: 0, leonShots: 0, edgarShots: 0, coltShots: 0, jumpTicks: 0, isInvisible: false, invisTicks: 0, hotdogTicks: 0
+  };
+}
+
 function initGame() {
-  blueWins = 0; 
-  redWins = 0; 
-  initMap(); 
+  blueWins = 0; redWins = 0; initMap(); 
 
-  let p1Name = players[0].name;
-  bluePlayer.brawler = p1Name;
-  bluePlayer.maxHp = BRAWLER_STATS[p1Name].hp;
-  bluePlayer.damage = BRAWLER_STATS[p1Name].damage;
-  bluePlayer.superDesc = BRAWLER_STATS[p1Name].superDesc;
-  bluePlayer.hits = 0; 
-  bluePlayer.damageDealt = 0; 
+  activePlayers = [];
+  let p1Name = players[0].name; let p2Name = players[1].name;
 
-  let p2Name = players[1].name;
-  redPlayer.brawler = p2Name;
-  redPlayer.maxHp = BRAWLER_STATS[p2Name].hp;
-  redPlayer.damage = BRAWLER_STATS[p2Name].damage;
-  redPlayer.superDesc = BRAWLER_STATS[p2Name].superDesc;
-  redPlayer.hits = 0;
-  redPlayer.damageDealt = 0; 
+  if (cpuMode) {
+    let bTeam = [p1Name];
+    activePlayers.push(createPlayerObject("blue1", "blue", bTeam[0], false));
+    bTeam.push(getRandomBrawler(bTeam)); activePlayers.push(createPlayerObject("blue2", "blue", bTeam[1], true)); 
+    bTeam.push(getRandomBrawler(bTeam)); activePlayers.push(createPlayerObject("blue3", "blue", bTeam[2], true)); 
 
+    let rTeam = [];
+    rTeam.push(getRandomBrawler(rTeam)); activePlayers.push(createPlayerObject("red1", "red", rTeam[0], true)); 
+    rTeam.push(getRandomBrawler(rTeam)); activePlayers.push(createPlayerObject("red2", "red", rTeam[1], true)); 
+    rTeam.push(getRandomBrawler(rTeam)); activePlayers.push(createPlayerObject("red3", "red", rTeam[2], true)); 
+  } else {
+    activePlayers.push(createPlayerObject("blue1", "blue", p1Name, false));
+    activePlayers.push(createPlayerObject("red1", "red", p2Name, false));
+  }
   startNextRound();
 }
 
 function startNextRound() {
-  projectiles = [];
-  smashEffects = [];
-  bombs = [];
-  puddles = [];
-  dougSplashes = [];
+  projectiles = []; smashEffects = []; bombs = []; puddles = []; dougSplashes = [];
+  roundStartFrame = frameCount;
 
-  bluePlayer.x = width * 0.1; 
-  bluePlayer.y = height / 2;  
-  bluePlayer.hp = bluePlayer.maxHp; 
-  bluePlayer.cooldown = 0;
-  bluePlayer.ammo = 3;        
-  bluePlayer.reloadTimer = 0;
-  bluePlayer.stunTicks = 0;
-  bluePlayer.attackWindup = 0;
-  bluePlayer.leonShots = 0;
-  bluePlayer.edgarShots = 0;
-  bluePlayer.coltShots = 0;
-  bluePlayer.lastCombatTime = frameCount; 
-  bluePlayer.dashTicks = 0;
-  bluePlayer.jumpTicks = 0;
-  bluePlayer.isInvisible = false;
-  bluePlayer.invisTicks = 0;
-  bluePlayer.hotdogTicks = 0;
-
-  redPlayer.x = width * 0.9; 
-  redPlayer.y = height / 2;
-  redPlayer.hp = redPlayer.maxHp;
-  redPlayer.cooldown = 0;
-  redPlayer.ammo = 3;
-  redPlayer.reloadTimer = 0;
-  redPlayer.stunTicks = 0;
-  redPlayer.attackWindup = 0;
-  redPlayer.leonShots = 0;
-  redPlayer.edgarShots = 0;
-  redPlayer.coltShots = 0;
-  redPlayer.lastCombatTime = frameCount;
-  redPlayer.dashTicks = 0;
-  redPlayer.jumpTicks = 0;
-  redPlayer.isInvisible = false;
-  redPlayer.invisTicks = 0;
-  redPlayer.hotdogTicks = 0;
+  let bCount = 0; let rCount = 0;
+  for (let p of activePlayers) {
+    if (p.team === "blue") {
+      p.x = width * 0.1;
+      p.y = bCount === 0 ? height * 0.5 : (bCount === 1 ? height * 0.25 : height * 0.75);
+      bCount++;
+    } else {
+      p.x = width * 0.9;
+      p.y = rCount === 0 ? height * 0.5 : (rCount === 1 ? height * 0.25 : height * 0.75);
+      rCount++;
+    }
+    p.hp = p.maxHp; p.cooldown = 0; p.ammo = 3; p.reloadTimer = 0; p.stunTicks = 0; p.attackWindup = 0;
+    p.leonShots = 0; p.edgarShots = 0; p.coltShots = 0; p.lastCombatTime = frameCount; 
+    p.dashTicks = 0; p.jumpTicks = 0; p.isInvisible = false; p.invisTicks = 0; p.hotdogTicks = 0;
+  }
 }
 
+// OPTIMIZATION: Core physics functions rewritten to use squared distance to avoid heavy square-root math causing lag!
 function checkWallCollision(px, py, radius) {
+  let rSq = radius * radius;
   for (let w of walls) {
-    let cx = constrain(px, w.x, w.x + w.w); 
-    let cy = constrain(py, w.y, w.y + w.h);
-    let distSq = (px - cx) * (px - cx) + (py - cy) * (py - cy);
-    if (distSq < radius * radius) {
-      return true; 
-    }
+    let cx = constrain(px, w.x, w.x + w.w); let cy = constrain(py, w.y, w.y + w.h);
+    let dx = px - cx; let dy = py - cy;
+    if ((dx * dx + dy * dy) < rSq) return true; 
   }
   return false; 
 }
 
 function checkProjWallCollision(px, py) {
-  for (let w of walls) {
-    if (px >= w.x && px <= w.x + w.w && py >= w.y && py <= w.y + w.h) {
-      return true;
-    }
-  }
+  for (let w of walls) { if (px >= w.x && px <= w.x + w.w && py >= w.y && py <= w.y + w.h) return true; }
   return false;
+}
+
+function addDamage(ownerId, amount) {
+  if (ownerId === "blue1") blueTotalDamage += amount;
+  else if (ownerId === "red1" && !cpuMode) redTotalDamage += amount;
 }
 
 function checkLineOfSight(x1, y1, x2, y2) {
   let d = dist(x1, y1, x2, y2);
-  let steps = Math.max(1, d / 10); // Check every 10 pixels along the path
+  let steps = Math.max(1, d / 25); 
   for (let i = 0; i <= steps; i++) {
-    let px = lerp(x1, x2, i / steps);
-    let py = lerp(y1, y2, i / steps);
-    if (checkProjWallCollision(px, py)) {
-      return false; // The line of sight hit a wall!
-    }
+    if (checkProjWallCollision(lerp(x1, x2, i / steps), lerp(y1, y2, i / steps))) return false; 
   }
-  return true; // The path is clear
+  return true; 
 }
 
 function resolveWallStuck(player) {
   let pRad = player.r / 2;
   for (let w of walls) {
-    if (
-      player.x + pRad > w.x &&
-      player.x - pRad < w.x + w.w &&
-      player.y + pRad > w.y &&
-      player.y - pRad < w.y + w.h
-    ) {
-      let distLeft = Math.abs(player.x + pRad - w.x);
-      let distRight = Math.abs(player.x - pRad - (w.x + w.w));
-      let distTop = Math.abs(player.y + pRad - w.y);
-      let distBottom = Math.abs(player.y - pRad - (w.y + w.h));
-
+    if (player.x + pRad > w.x && player.x - pRad < w.x + w.w && player.y + pRad > w.y && player.y - pRad < w.y + w.h) {
+      let distLeft = Math.abs(player.x + pRad - w.x); let distRight = Math.abs(player.x - pRad - (w.x + w.w));
+      let distTop = Math.abs(player.y + pRad - w.y); let distBottom = Math.abs(player.y - pRad - (w.y + w.h));
       let minD = Math.min(distLeft, distRight, distTop, distBottom);
-      if (minD === distLeft) player.x = w.x - pRad;
-      else if (minD === distRight) player.x = w.x + w.w + pRad;
-      else if (minD === distTop) player.y = w.y - pRad;
-      else if (minD === distBottom) player.y = w.y + w.h + pRad;
+      if (minD === distLeft) player.x = w.x - pRad; else if (minD === distRight) player.x = w.x + w.w + pRad;
+      else if (minD === distTop) player.y = w.y - pRad; else if (minD === distBottom) player.y = w.y + w.h + pRad;
     }
   }
+}
+
+// OPTIMIZATION: Pre-calculate the squared distance to avoid math overhead in bot logic
+function getNearestEnemy(player) {
+  let nearest = null; let minDistSq = Infinity;
+  for (let e of activePlayers) {
+    if (e.team !== player.team && e.hp > 0 && !e.isInvisible) {
+      let dx = player.x - e.x; let dy = player.y - e.y;
+      let dSq = dx * dx + dy * dy;
+      if (dSq < minDistSq) { minDistSq = dSq; nearest = e; }
+    }
+  }
+  return { target: nearest, distSq: minDistSq };
 }
 
 function shootProjectile(shooter, target, isSuper = false, overrideAngle = null) {
   if (shooter.cooldown > 0 || shooter.stunTicks > 0) return; 
 
-  if (isSuper) {
-    let requiredHits = BRAWLER_STATS[shooter.brawler].hitsToSuper;
-    if (shooter.hits < requiredHits) return; 
-  } else {
-    if (shooter.ammo <= 0) return;
-  }
+  if (isSuper) { if (shooter.hits < BRAWLER_STATS[shooter.brawler].hitsToSuper) return; } 
+  else { if (shooter.ammo <= 0) return; }
 
-  if (isSuper) {
-    shooter.hits = 0; 
-  } else {
-    shooter.ammo--; 
-  }
-
+  if (isSuper) shooter.hits = 0; else shooter.ammo--; 
   shooter.lastCombatTime = frameCount; 
 
-  if (!(shooter.brawler === "Leon" && isSuper)) {
-    shooter.isInvisible = false;
-    shooter.invisTicks = 0;
-  }
+  if (!(shooter.brawler === "Leon" && isSuper)) { shooter.isInvisible = false; shooter.invisTicks = 0; }
 
-  let angle;
-  if (overrideAngle !== null) {
-    angle = overrideAngle;
-  } else if (target.isInvisible) {
-    angle = random(TWO_PI);
-  } else {
-    angle = atan2(target.y - shooter.y, target.x - shooter.x);
-  }
+  let angle = overrideAngle !== null ? overrideAngle : random(TWO_PI);
+  if (target && overrideAngle === null && !target.isInvisible) angle = atan2(target.y - shooter.y, target.x - shooter.x);
 
   if (shooter.brawler === "Doug") {
-    if (isSuper) {
-      shooter.hotdogTicks = 900; 
-    } else {
+    if (isSuper) { shooter.hotdogTicks = 900; } else {
       shooter.hp = Math.min(shooter.hp + 480, shooter.maxHp);
       let aoeRadius = BRAWLER_STATS["Doug"].range / 2;
-      dougSplashes.push({
-        x: shooter.x,
-        y: shooter.y,
-        radius: BRAWLER_STATS["Doug"].range,
-        life: 15,
-      });
-      if (dist(shooter.x, shooter.y, target.x, target.y) < aoeRadius + target.r / 2) {
-        target.hp -= shooter.damage;
-        if (shooter.id === "blue") blueTotalDamage += shooter.damage;
-        else redTotalDamage += shooter.damage;
-        shooter.hits++;
-        target.lastCombatTime = frameCount;
+      dougSplashes.push({ x: shooter.x, y: shooter.y, radius: aoeRadius*2, life: 15, team: shooter.team });
+      for (let e of activePlayers) {
+        if (e.team !== shooter.team && e.hp > 0) {
+          let dx = shooter.x - e.x; let dy = shooter.y - e.y; let threshold = aoeRadius + e.r / 2;
+          if (dx*dx + dy*dy < threshold*threshold) {
+            e.hp -= shooter.damage; addDamage(shooter.id, shooter.damage);
+            shooter.hits++; e.lastCombatTime = frameCount;
+          }
+        }
       }
     }
-    shooter.cooldown = shooter.maxCooldown;
-    return; 
+    shooter.cooldown = shooter.maxCooldown; return; 
   }
 
   if (shooter.brawler === "Barley" && isSuper) {
@@ -698,186 +407,89 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     let cy = shooter.y + sin(angle) * BRAWLER_STATS["Barley"].range;
     let spacing = 60;
     let offsets = [[0, 0], [-spacing, -spacing], [spacing, -spacing], [-spacing, spacing], [spacing, spacing]];
-
     for (let off of offsets) {
-      let tx = cx + off[0];
-      let ty = cy + off[1];
-      let tAngle = atan2(ty - shooter.y, tx - shooter.x); 
-      let tDist = dist(shooter.x, shooter.y, tx, ty);     
-
+      let tx = cx + off[0]; let ty = cy + off[1];
       projectiles.push({
         x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y,
-        maxRange: tDist, brawlerName: shooter.brawler,
-        vx: cos(tAngle) * 12, vy: sin(tAngle) * 12, damage: shooter.damage,
-        owner: shooter.id, ignoresWalls: true, isSuper: true, active: true,
+        maxRange: dist(shooter.x, shooter.y, tx, ty), brawlerName: shooter.brawler,
+        vx: cos(atan2(ty - shooter.y, tx - shooter.x)) * 12, vy: sin(atan2(ty - shooter.y, tx - shooter.x)) * 12, 
+        damage: shooter.damage, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: true, isSuper: true, active: true,
       });
     }
-    shooter.cooldown = shooter.maxCooldown;
-    return; 
+    shooter.cooldown = shooter.maxCooldown; return; 
   }
 
-  if (shooter.brawler === "Leon" && isSuper) {
-    shooter.isInvisible = true;
-    shooter.invisTicks = 360; 
-    shooter.cooldown = shooter.maxCooldown;
-    return; 
-  }
+  if (shooter.brawler === "Leon" && isSuper) { shooter.isInvisible = true; shooter.invisTicks = 360; shooter.cooldown = shooter.maxCooldown; return; }
 
   if (shooter.brawler === "Piper" && isSuper) {
-    let jumpAngle = angle + PI;
-    shooter.jumpTicks = 45; 
-    let jumpDist = 350;     
-
-    shooter.jumpVx = cos(jumpAngle) * (jumpDist / 45);
-    shooter.jumpVy = sin(jumpAngle) * (jumpDist / 45);
-
+    shooter.jumpTicks = 45; shooter.jumpVx = cos(angle + PI) * (350 / 45); shooter.jumpVy = sin(angle + PI) * (350 / 45);
     let offsets = [[-15, -15], [15, -15], [-15, 15], [15, 15]];
-    for (let off of offsets) {
-      bombs.push({
-        x: shooter.x + off[0], y: shooter.y + off[1],
-        ticks: 60, damage: 1800, owner: shooter.id,
-      });
-    }
-    shooter.cooldown = shooter.maxCooldown;
-    return;
+    for (let off of offsets) bombs.push({ x: shooter.x + off[0], y: shooter.y + off[1], ticks: 60, damage: 1800, owner: shooter.id, ownerTeam: shooter.team });
+    shooter.cooldown = shooter.maxCooldown; return;
   }
 
   if (shooter.brawler === "Edgar" && isSuper) {
-    let jumpAngle = angle;
-    shooter.jumpTicks = 45;
-    let jumpDist = target.isInvisible ? 300 : Math.min(400, dist(shooter.x, shooter.y, target.x, target.y));
-    shooter.jumpVx = cos(jumpAngle) * (jumpDist / 45);
-    shooter.jumpVy = sin(jumpAngle) * (jumpDist / 45);
-    shooter.cooldown = shooter.maxCooldown;
-    return;
+    shooter.jumpTicks = 45; let jumpDist = (target && target.isInvisible) ? 300 : Math.min(400, target ? dist(shooter.x, shooter.y, target.x, target.y) : 300);
+    shooter.jumpVx = cos(angle) * (jumpDist / 45); shooter.jumpVy = sin(angle) * (jumpDist / 45); shooter.cooldown = shooter.maxCooldown; return;
   }
 
   if (shooter.brawler === "Mortis") {
     if (isSuper) {
-      projectiles.push({
-        x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y,
-        maxRange: BRAWLER_STATS["Mortis"].range * 2, brawlerName: shooter.brawler,
-        vx: cos(angle) * 15, vy: sin(angle) * 15, damage: 1800,
-        owner: shooter.id, ignoresWalls: true, isSuper: true, active: true,
-      });
-      shooter.cooldown = shooter.maxCooldown;
+      projectiles.push({ x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y, maxRange: BRAWLER_STATS["Mortis"].range * 2, brawlerName: shooter.brawler, vx: cos(angle) * 15, vy: sin(angle) * 15, damage: 1800, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: true, isSuper: true, active: true, });
     } else {
-      shooter.dashTicks = 12; 
-      let dashSpeed = BRAWLER_STATS["Mortis"].range / 12; 
-      shooter.dashVx = cos(angle) * dashSpeed;
-      shooter.dashVy = sin(angle) * dashSpeed;
-      shooter.hasDamagedInDash = false; 
-      shooter.cooldown = shooter.maxCooldown;
+      shooter.dashTicks = 12; shooter.dashVx = cos(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.dashVy = sin(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.hasDamagedInDash = false; 
     }
-    return; 
+    shooter.cooldown = shooter.maxCooldown; return; 
   }
 
   if (shooter.brawler === "Frank") {
-    let hpRatio = Math.max(0.1, shooter.hp / shooter.maxHp);
-    shooter.attackWindup = floor(10 + 40 * hpRatio); 
-    shooter.windupAngle = angle;
-    shooter.windupIsSuper = isSuper;
-    shooter.cooldown = shooter.maxCooldown + shooter.attackWindup; 
-    return; 
+    shooter.attackWindup = floor(10 + 40 * Math.max(0.1, shooter.hp / shooter.maxHp)); 
+    shooter.windupAngle = angle; shooter.windupIsSuper = isSuper; shooter.cooldown = shooter.maxCooldown + shooter.attackWindup; return; 
   }
 
-  if (shooter.brawler === "Leon") {
-    let projCount = BRAWLER_STATS["Leon"].projectiles;
-    if (isSuper) projCount *= 2;
-    shooter.leonShots = projCount;
-    shooter.leonTimer = 0; 
-    shooter.leonAngle = angle;
-    shooter.leonIsSuper = isSuper;
-    shooter.cooldown = shooter.maxCooldown;
-    return; 
-  }
-
-  if (shooter.brawler === "Edgar" && !isSuper) {
-    shooter.edgarShots = BRAWLER_STATS["Edgar"].projectiles;
-    shooter.edgarTimer = 0;
-    shooter.edgarAngle = angle;
-    shooter.cooldown = shooter.maxCooldown;
-    return;
-  }
-
-  if (shooter.brawler === "Colt") {
-    let projCount = isSuper ? BRAWLER_STATS["Colt"].superProjectiles : BRAWLER_STATS["Colt"].projectiles;
-    shooter.coltShots = projCount;
-    shooter.coltTimer = 0; 
-    shooter.coltAngle = angle;
-    shooter.coltIsSuper = isSuper;
-    shooter.cooldown = shooter.maxCooldown;
-    return; 
-  }
+  if (shooter.brawler === "Leon") { shooter.leonShots = BRAWLER_STATS["Leon"].projectiles * (isSuper ? 2 : 1); shooter.leonTimer = 0; shooter.leonAngle = angle; shooter.leonIsSuper = isSuper; shooter.cooldown = shooter.maxCooldown; return; }
+  if (shooter.brawler === "Edgar" && !isSuper) { shooter.edgarShots = BRAWLER_STATS["Edgar"].projectiles; shooter.edgarTimer = 0; shooter.edgarAngle = angle; shooter.cooldown = shooter.maxCooldown; return; }
+  if (shooter.brawler === "Colt") { shooter.coltShots = isSuper ? BRAWLER_STATS["Colt"].superProjectiles : BRAWLER_STATS["Colt"].projectiles; shooter.coltTimer = 0; shooter.coltAngle = angle; shooter.coltIsSuper = isSuper; shooter.cooldown = shooter.maxCooldown; return; }
 
   let ignoresWalls = ["Doug", "Dynamike", "Barley"].includes(shooter.brawler);
   let projCount = isSuper ? BRAWLER_STATS[shooter.brawler].superProjectiles : BRAWLER_STATS[shooter.brawler].projectiles;
 
   for (let i = 0; i < projCount; i++) {
-    let finalAngle = angle;
-    let speed = 12;
-    let spawnX = shooter.x;
-    let spawnY = shooter.y;
+    let finalAngle = angle; let spawnX = shooter.x; let spawnY = shooter.y;
 
     if (projCount > 1) {
       if (shooter.brawler === "Dynamike" && !isSuper) {
-        let perpAngle = angle + PI / 2; 
-        let offset = i === 0 ? -12 : 12; 
-        spawnX += cos(perpAngle) * offset;
-        spawnY += sin(perpAngle) * offset;
+        spawnX += cos(angle + PI / 2) * (i === 0 ? -12 : 12); spawnY += sin(angle + PI / 2) * (i === 0 ? -12 : 12);
       } else {
-        let spreadAmount = isSuper ? 1.0 : 0.5; 
-        let startAngle = angle - spreadAmount / 2; 
-        let angleStep = spreadAmount / (projCount - 1); 
-        finalAngle = startAngle + i * angleStep; 
+        let spread = isSuper ? 1.0 : 0.5; finalAngle = (angle - spread / 2) + i * (spread / (projCount - 1)); 
       }
     }
 
     projectiles.push({
       x: spawnX, y: spawnY, startX: spawnX, startY: spawnY,
       maxRange: BRAWLER_STATS[shooter.brawler].range, brawlerName: shooter.brawler,
-      vx: cos(finalAngle) * speed, vy: sin(finalAngle) * speed,
-      damage: shooter.damage, owner: shooter.id, ignoresWalls: ignoresWalls,
-      isSuper: isSuper, active: true, 
+      vx: cos(finalAngle) * 12, vy: sin(finalAngle) * 12, damage: shooter.damage, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: ignoresWalls, isSuper: isSuper, active: true, 
     });
   }
   shooter.cooldown = shooter.maxCooldown;
 }
 
-function executeFrankSmash(frank, enemy) {
+function executeFrankSmash(frank) {
   let range = frank.windupIsSuper ? BRAWLER_STATS["Frank"].superRange : BRAWLER_STATS["Frank"].range;
-  let spreadAngle = PI / 3; 
+  smashEffects.push({ x: frank.x, y: frank.y, angle: frank.windupAngle, range: range, spread: PI / 3, life: 15, isSuper: frank.windupIsSuper, });
 
-  smashEffects.push({
-    x: frank.x, y: frank.y, angle: frank.windupAngle, range: range, spread: spreadAngle,
-    life: 15, isSuper: frank.windupIsSuper,
-  });
+  for (let enemy of activePlayers) {
+    if (enemy.team !== frank.team && enemy.hp > 0) {
+      if (dist(frank.x, frank.y, enemy.x, enemy.y) - (enemy.r / 2) <= range) {
+        let diff = atan2(enemy.y - frank.y, enemy.x - frank.x) - frank.windupAngle;
+        while (diff > PI) diff -= TWO_PI; while (diff < -PI) diff += TWO_PI;
 
-  let distToEnemy = dist(frank.x, frank.y, enemy.x, enemy.y);
-  let eRad = enemy.r / 2;
-
-  if (distToEnemy - eRad <= range) {
-    let angleToEnemy = atan2(enemy.y - frank.y, enemy.x - frank.x);
-    let diff = angleToEnemy - frank.windupAngle;
-    while (diff > PI) diff -= TWO_PI;
-    while (diff < -PI) diff += TWO_PI;
-
-    if (abs(diff) <= spreadAngle / 2) {
-      // Check Line of Sight if it's a normal attack (Super pierces walls)
-      let canHit = true;
-      if (!frank.windupIsSuper) {
-        canHit = checkLineOfSight(frank.x, frank.y, enemy.x, enemy.y);
-      }
-
-      if (canHit) {
-        enemy.hp -= frank.damage;
-        if (frank.id === "blue") blueTotalDamage += frank.damage;
-        else redTotalDamage += frank.damage;
-        frank.hits++;
-        frank.lastCombatTime = frameCount;
-        enemy.lastCombatTime = frameCount;
-        if (frank.windupIsSuper) {
-          enemy.stunTicks = floor(2.48 * 60); 
+        if (abs(diff) <= (PI / 3) / 2) {
+          if (frank.windupIsSuper || checkLineOfSight(frank.x, frank.y, enemy.x, enemy.y)) {
+            enemy.hp -= frank.damage; addDamage(frank.id, frank.damage);
+            frank.hits++; frank.lastCombatTime = frameCount; enemy.lastCombatTime = frameCount;
+            if (frank.windupIsSuper) enemy.stunTicks = floor(2.48 * 60); 
+          }
         }
       }
     }
@@ -886,1106 +498,545 @@ function executeFrankSmash(frank, enemy) {
   if (frank.windupIsSuper) {
     for (let i = walls.length - 1; i >= 0; i--) {
       let w = walls[i];
-      
-      // Test multiple points on the wall to ensure reliable breaking (corners, center, and closest edge)
-      let cx = constrain(frank.x, w.x, w.x + w.w); 
-      let cy = constrain(frank.y, w.y, w.y + w.h);
-      
-      let testPoints = [
-        {x: w.x, y: w.y}, 
-        {x: w.x + w.w, y: w.y}, 
-        {x: w.x, y: w.y + w.h}, 
-        {x: w.x + w.w, y: w.y + w.h}, 
-        {x: w.x + w.w / 2, y: w.y + w.h / 2}, 
-        {x: cx, y: cy} 
-      ];
-
+      let testPoints = [ {x: w.x, y: w.y}, {x: w.x + w.w, y: w.y}, {x: w.x, y: w.y + w.h}, {x: w.x + w.w, y: w.y + w.h}, {x: w.x + w.w / 2, y: w.y + w.h / 2}, {x: constrain(frank.x, w.x, w.x + w.w), y: constrain(frank.y, w.y, w.y + w.h)} ];
       let hitWall = false;
       for (let pt of testPoints) {
         if (dist(frank.x, frank.y, pt.x, pt.y) <= range) {
-          let angleToPt = atan2(pt.y - frank.y, pt.x - frank.x);
-          let diff = angleToPt - frank.windupAngle;
-          while (diff > PI) diff -= TWO_PI;
-          while (diff < -PI) diff += TWO_PI;
-
-          if (abs(diff) <= spreadAngle / 2) {
-            hitWall = true;
-            break; // Break the inner loop, we found a hit!
-          }
+          let diff = atan2(pt.y - frank.y, pt.x - frank.x) - frank.windupAngle;
+          while (diff > PI) diff -= TWO_PI; while (diff < -PI) diff += TWO_PI;
+          if (abs(diff) <= (PI / 3) / 2) { hitWall = true; break; }
         }
       }
-
-      if (hitWall) {
-        walls.splice(i, 1); 
-      }
+      if (hitWall) walls.splice(i, 1); 
     }
   }
 }
 
 function fireLeonBlade(leon) {
-  let totalShots = BRAWLER_STATS["Leon"].projectiles * (leon.leonIsSuper ? 2 : 1);
-  let shotIndex = totalShots - leon.leonShots;
-  let angleOffset = -(shotIndex * 0.15);
-  let finalAngle = leon.leonAngle + angleOffset;
-
-  projectiles.push({
-    x: leon.x, y: leon.y, startX: leon.x, startY: leon.y,
-    maxRange: BRAWLER_STATS["Leon"].range, brawlerName: "Leon",
-    vx: cos(finalAngle) * 12, vy: sin(finalAngle) * 12, damage: leon.damage,
-    owner: leon.id, ignoresWalls: false, isSuper: leon.leonIsSuper, active: true,
-  });
+  let finalAngle = leon.leonAngle - (((BRAWLER_STATS["Leon"].projectiles * (leon.leonIsSuper ? 2 : 1)) - leon.leonShots) * 0.15);
+  projectiles.push({ x: leon.x, y: leon.y, startX: leon.x, startY: leon.y, maxRange: BRAWLER_STATS["Leon"].range, brawlerName: "Leon", vx: cos(finalAngle) * 12, vy: sin(finalAngle) * 12, damage: leon.damage, owner: leon.id, ownerTeam: leon.team, ignoresWalls: false, isSuper: leon.leonIsSuper, active: true, });
 }
 
 function fireEdgarPunch(edgar) {
-  projectiles.push({
-    x: edgar.x, y: edgar.y, startX: edgar.x, startY: edgar.y,
-    maxRange: BRAWLER_STATS["Edgar"].range, brawlerName: "Edgar",
-    vx: cos(edgar.edgarAngle) * 12, vy: sin(edgar.edgarAngle) * 12,
-    damage: edgar.damage, owner: edgar.id, ignoresWalls: false, isSuper: false, active: true,
-  });
+  projectiles.push({ x: edgar.x, y: edgar.y, startX: edgar.x, startY: edgar.y, maxRange: BRAWLER_STATS["Edgar"].range, brawlerName: "Edgar", vx: cos(edgar.edgarAngle) * 12, vy: sin(edgar.edgarAngle) * 12, damage: edgar.damage, owner: edgar.id, ownerTeam: edgar.team, ignoresWalls: false, isSuper: false, active: true, });
 }
 
 function fireColtBullet(colt) {
-  let totalShots = colt.coltIsSuper ? BRAWLER_STATS["Colt"].superProjectiles : BRAWLER_STATS["Colt"].projectiles;
-  let shotIndex = totalShots - colt.coltShots;
-  
-  let sideOffset = (shotIndex % 2 === 0) ? -12 : 12; // Alternate left and right pistol spacing
-  let perpAngle = colt.coltAngle + PI / 2;
-  let spawnX = colt.x + cos(perpAngle) * sideOffset;
-  let spawnY = colt.y + sin(perpAngle) * sideOffset;
-  
-  projectiles.push({
-    x: spawnX, y: spawnY, startX: spawnX, startY: spawnY,
-    maxRange: BRAWLER_STATS["Colt"].range, brawlerName: "Colt",
-    vx: cos(colt.coltAngle) * 14, vy: sin(colt.coltAngle) * 14, // Slightly slower constant speed
-    damage: colt.damage, owner: colt.id, ignoresWalls: colt.coltIsSuper, isSuper: colt.coltIsSuper, active: true,
-  });
+  let sideOffset = (((colt.coltIsSuper ? BRAWLER_STATS["Colt"].superProjectiles : BRAWLER_STATS["Colt"].projectiles) - colt.coltShots) % 2 === 0) ? -12 : 12; 
+  projectiles.push({ x: colt.x + cos(colt.coltAngle + PI / 2) * sideOffset, y: colt.y + sin(colt.coltAngle + PI / 2) * sideOffset, startX: colt.x + cos(colt.coltAngle + PI / 2) * sideOffset, startY: colt.y + sin(colt.coltAngle + PI / 2) * sideOffset, maxRange: BRAWLER_STATS["Colt"].range, brawlerName: "Colt", vx: cos(colt.coltAngle) * 14, vy: sin(colt.coltAngle) * 14, damage: colt.damage, owner: colt.id, ownerTeam: colt.team, ignoresWalls: colt.coltIsSuper, isSuper: colt.coltIsSuper, active: true, });
 }
 
 function drawWeapon(player, angle) {
-  push();
-  translate(player.x, player.y);
-  rotate(angle);
-
+  push(); translate(player.x, player.y); rotate(angle);
   switch (player.brawler) {
     case "Shelly":
       let wImg = brawlerImages["ShellyWeapon"];
-      if (wImg && wImg.width > 10 && wImg.height > 10) {
-        let aspect = wImg.width / wImg.height;
-        let drawH = 25;
-        let drawW = drawH * aspect;
-        push();
-        translate(20, 0); 
-        scale(-1, 1);
-        if (cos(angle) < 0) {
-          scale(1, -1);
-        }
-        imageMode(CENTER);
-        image(wImg, 0, 0, drawW, drawH);
-        pop();
-      } else {
-        fill(100);
-        rect(15, -4, 35, 8); 
-        fill("#8B4513");
-        rect(5, -4, 15, 10); 
-      }
+      if (wImg && wImg.width > 10) { push(); translate(20, 0); scale(-1, 1); if (cos(angle) < 0) scale(1, -1); imageMode(CENTER); image(wImg, 0, 0, 25 * (wImg.width / wImg.height), 25); pop(); } 
+      else { fill(100); rect(15, -4, 35, 8); fill("#8B4513"); rect(5, -4, 15, 10); }
       break;
-    case "Colt":
-      fill(100);
-      rect(15, -12, 15, 6); 
-      rect(15, 6, 15, 6); 
-      break;
-    case "Leon":
-      fill("yellow");
-      rect(20, -2, 10, 4);
-      rect(23, -5, 4, 10);
-      break;
-    case "Piper":
-      stroke("#00a8ff");
-      strokeWeight(4);
-      line(10, 0, 40, 0);
-      fill("#00a8ff");
-      noStroke();
-      arc(40, 0, 20, 20, -PI / 2, PI / 2);
-      break;
-    case "Mortis":
-      fill("#8B4513");
-      rect(10, -3, 30, 6);
-      fill(150);
-      rect(40, -10, 10, 20);
-      break;
-    case "Dynamike":
-      fill("red");
-      rect(15, -12, 15, 8);
-      rect(15, 4, 15, 8);
-      fill("white");
-      rect(30, -10, 4, 4);
-      rect(30, 6, 4, 4);
-      break;
-    case "Frank":
-      if (player.attackWindup > 0) {
-        rotate(-PI / 4); 
-      }
-      fill("#8B4513");
-      rect(10, -5, 40, 10);
-      fill(100);
-      rect(45, -20, 25, 40);
-      break;
-    case "Edgar":
-      stroke(0);
-      strokeWeight(6);
-      line(0, -15, -20, -25);
-      stroke("white");
-      strokeWeight(3);
-      line(0, -15, -20, -25);
-
-      stroke(0);
-      strokeWeight(6);
-      line(0, 15, -20, 25);
-      stroke("white");
-      strokeWeight(3);
-      line(0, 15, -20, 25);
-      noStroke();
-      break;
-    case "Doug":
-      fill("#d4af37");
-      rect(15, -8, 20, 16, 5); 
-      fill("red");
-      rect(35, -2, 6, 4);
-      break;
-    case "Barley":
-      fill("green");
-      rect(20, -6, 12, 12, 4);
-      rect(32, -3, 8, 6);
-      fill("orange");
-      rect(40, -4, 6, 8);
-      break;
+    case "Colt": fill(100); rect(15, -12, 15, 6); rect(15, 6, 15, 6); break;
+    case "Leon": fill("yellow"); rect(20, -2, 10, 4); rect(23, -5, 4, 10); break;
+    case "Piper": stroke("#00a8ff"); strokeWeight(4); line(10, 0, 40, 0); fill("#00a8ff"); noStroke(); arc(40, 0, 20, 20, -PI / 2, PI / 2); break;
+    case "Mortis": fill("#8B4513"); rect(10, -3, 30, 6); fill(150); rect(40, -10, 10, 20); break;
+    case "Dynamike": fill("red"); rect(15, -12, 15, 8); rect(15, 4, 15, 8); fill("white"); rect(30, -10, 4, 4); rect(30, 6, 4, 4); break;
+    case "Frank": if (player.attackWindup > 0) rotate(-PI / 4); fill("#8B4513"); rect(10, -5, 40, 10); fill(100); rect(45, -20, 25, 40); break;
+    case "Edgar": stroke(0); strokeWeight(6); line(0, -15, -20, -25); stroke("white"); strokeWeight(3); line(0, -15, -20, -25); stroke(0); strokeWeight(6); line(0, 15, -20, 25); stroke("white"); strokeWeight(3); line(0, 15, -20, 25); noStroke(); break;
+    case "Doug": fill("#d4af37"); rect(15, -8, 20, 16, 5); fill("red"); rect(35, -2, 6, 4); break;
+    case "Barley": fill("green"); rect(20, -6, 12, 12, 4); rect(32, -3, 8, 6); fill("orange"); rect(40, -4, 6, 8); break;
   }
   pop();
 }
 
 function draw() {
-  if (gameState === "LOBBY") {
-    drawLobby();
-  } else if (gameState === "GAME") {
-    drawGame();
+  if (gameState === "SPLASH") drawSplash();
+  else if (gameState === "LOADING") drawLoading();
+  else if (gameState === "LOBBY") drawLobby();
+  else if (gameState === "GAME") drawGame();
+}
+
+function drawSplash() {
+  background("#c39bd3"); // Light purple background
+  
+  let logo = brawlerImages["Logo"];
+  if (logo && logo.width > 0) {
+    let scalePulse = 1.0 + sin(frameCount * 0.05) * 0.05; // Gentle shrink and grow
+    push();
+    imageMode(CENTER);
+    translate(width / 2, height / 2 - 50);
+    scale(scalePulse);
+    let maxW = min(width * 0.6, 500); // Scale nicely to the screen
+    let aspect = logo.height / logo.width;
+    image(logo, 0, 0, maxW, maxW * aspect);
+    pop();
+  } else {
+    // Fallback text if Logo.png is missing
+    push(); fill(255); textAlign(CENTER, CENTER); textSize(60);
+    let scalePulse = 1.0 + sin(frameCount * 0.05) * 0.05;
+    translate(width / 2, height / 2 - 50); scale(scalePulse);
+    text("BRAWL STARS 2.0", 0, 0);
+    pop();
+  }
+
+  if (!splashStartBtn) {
+    splashStartBtn = new Button("splash_start", "START", width / 2, height / 2 + 150, 250, 60, "#f1c40f", "#ffffff");
+  }
+  splashStartBtn.update(mouseX, mouseY);
+  splashStartBtn.draw();
+}
+
+function drawLoading() {
+  background(0);
+  fill(255); textAlign(CENTER, CENTER); textSize(40);
+  text("LOADING ASSETS...", width / 2, height / 2 - 50);
+  
+  let w = 300; let h = 30;
+  noFill(); stroke(255); strokeWeight(4);
+  rect(width / 2 - w / 2, height / 2, w, h, 10);
+  
+  fill("#2ecc71"); noStroke();
+  let progress = totalAssets > 0 ? (loadedAssets / totalAssets) * w : 0;
+  rect(width / 2 - w / 2, height / 2, progress, h, 10);
+  
+  if (loadedAssets >= totalAssets && totalAssets > 0) {
+    gameState = "LOBBY"; // Instantly jump to lobby when done loading!
   }
 }
 
 function drawLobby() {
   drawBackground(); 
-  
-  if (showLobbyTitle) {
-    push();
-    fill("#ff2e43"); 
-    stroke("#000000");
-    strokeWeight(8);
-    textAlign(CENTER, TOP);
-    textSize(80);
-    text("BrawlTards", width / 2, 40);
-    pop();
-  }
-
-  for (let player of players) {
-    player.update();
-    player.draw();
-  }
-  for (let btn of buttons) {
-    btn.update(mouseX, mouseY);
-    btn.draw();
-  }
-  
-  if (controllerSwitch) {
-    controllerSwitch.update(mouseX, mouseY);
-    controllerSwitch.draw();
-  }
-
+  if (showLobbyTitle) { push(); fill("#ff2e43"); stroke("#000000"); strokeWeight(8); textAlign(CENTER, TOP); textSize(80); text("BRAWL STARS 2.0", width / 2, 40); pop(); }
+  for (let player of players) { player.update(); player.draw(); }
+  for (let btn of buttons) { btn.update(mouseX, mouseY); btn.draw(); }
+  if (controllerSwitch) { controllerSwitch.update(mouseX, mouseY); controllerSwitch.draw(); }
+  if (cpuSwitch) { cpuSwitch.update(mouseX, mouseY); cpuSwitch.draw(); }
   drawMenus();
 
-  push();
-  fill(0, 0, 0, 150); 
-  rectMode(CORNER);
-  rect(20, 20, 280, 80, 10); 
-
-  fill("#f1c40f"); 
-  textSize(30);
-  textAlign(LEFT, TOP);
-  text(`P1 WINS: ${blueTotalWins}`, 30, 30);
-  fill(255); 
-  textSize(20);
-  text(`TOTAL DMG: ${Math.floor(blueTotalDamage)}`, 30, 65);
-
-  fill(0, 0, 0, 150); 
-  rectMode(CORNER);
-  rect(width - 300, 20, 280, 80, 10); 
-
-  fill("#f1c40f");
-  textSize(30);
-  textAlign(RIGHT, TOP);
-  text(`P2 WINS: ${redTotalWins}`, width - 30, 30);
-  fill(255);
-  textSize(20);
-  text(`TOTAL DMG: ${Math.floor(redTotalDamage)}`, width - 30, 65);
-  pop();
+  push(); fill(0, 0, 0, 150); rectMode(CORNER); rect(20, 20, 280, 80, 10); fill("#f1c40f"); textSize(30); textAlign(LEFT, TOP); text(`P1 WINS: ${blueTotalWins}`, 30, 30); fill(255); textSize(20); text(`TOTAL DMG: ${Math.floor(blueTotalDamage)}`, 30, 65);
+  fill(0, 0, 0, 150); rectMode(CORNER); rect(width - 300, 20, 280, 80, 10); fill("#f1c40f"); textSize(30); textAlign(RIGHT, TOP); text(`P2 WINS: ${redTotalWins}`, width - 30, 30); fill(255); textSize(20); text(`TOTAL DMG: ${Math.floor(redTotalDamage)}`, width - 30, 65); pop();
 }
 
 function drawGame() {
   background("#e6cc98"); 
 
-  let playersArray = [
-    [bluePlayer, redPlayer],
-    [redPlayer, bluePlayer],
-  ];
-  
-  for (let [p, enemy] of playersArray) {
+  // OPTIMIZATION: Only grab the gamepad state array if Controller Mode is actively toggled ON!
+  let gamepads = [];
+  if (useControllers && navigator.getGamepads) {
+    gamepads = navigator.getGamepads();
+  }
+
+  for (let p of activePlayers) {
+    if (p.hp <= 0) continue; 
+    
+    if (p.stunTicks > 0) { p.attackWindup = 0; p.leonShots = 0; p.edgarShots = 0; p.coltShots = 0; } 
+    else {
+      if (p.attackWindup > 0) { p.attackWindup--; if (p.attackWindup === 0) executeFrankSmash(p); }
+      if (p.leonShots > 0) { if (p.leonTimer <= 0) { fireLeonBlade(p); p.leonShots--; p.leonTimer = 6; } else p.leonTimer--; }
+      if (p.edgarShots > 0) { if (p.edgarTimer <= 0) { fireEdgarPunch(p); p.edgarShots--; p.edgarTimer = 4; } else p.edgarTimer--; }
+      if (p.coltShots > 0) { if (p.coltTimer <= 0) { fireColtBullet(p); p.coltShots--; p.coltTimer = 3; } else p.coltTimer--; }
+    }
+    
+    if (p.cooldown > 0) p.cooldown--;
+    if (p.ammo < 3) { p.reloadTimer++; if (p.reloadTimer >= BRAWLER_STATS[p.brawler].reloadTime) { p.ammo++; p.reloadTimer = 0; } } else { p.reloadTimer = 0; }
+    if (frameCount - p.lastCombatTime > 180 && p.hp > 0 && p.hp < p.maxHp) p.hp = min(p.maxHp, p.hp + p.maxHp * 0.002);
+    if (p.invisTicks > 0) { p.invisTicks--; if (p.invisTicks <= 0) p.isInvisible = false; }
+  }
+
+  for (let p of activePlayers) {
+    if (p.hp <= 0) continue;
+    let pRad = p.r / 2; let nextX = p.x; let nextY = p.y; 
+
     if (p.stunTicks > 0) {
-      p.attackWindup = 0; 
-      p.leonShots = 0; 
-      p.edgarShots = 0;
-      p.coltShots = 0;
-    } else {
-      if (p.attackWindup > 0) {
-        p.attackWindup--;
-        if (p.attackWindup === 0) executeFrankSmash(p, enemy);
-      }
-      if (p.leonShots > 0) {
-        if (p.leonTimer <= 0) {
-          fireLeonBlade(p);
-          p.leonShots--; 
-          p.leonTimer = 6; 
-        } else {
-          p.leonTimer--;
+      p.stunTicks--; if (!p.isInvisible) { fill("yellow"); textAlign(CENTER, CENTER); textSize(20); text("★", p.x, p.y - p.r - 20); }
+    } else if (p.attackWindup > 0) {
+    } else if (p.jumpTicks > 0) {
+      p.jumpTicks--; p.x += p.jumpVx; p.y += p.jumpVy; if (p.jumpTicks === 0) resolveWallStuck(p);
+    } else if (p.dashTicks > 0) {
+      p.dashTicks--; nextX = p.x + p.dashVx; nextY = p.y + p.dashVy;
+      if (!checkWallCollision(nextX, p.y, pRad)) p.x = nextX; if (!checkWallCollision(p.x, nextY, pRad)) p.y = nextY;
+
+      if (!p.hasDamagedInDash) {
+        for (let e of activePlayers) {
+          if (e.team !== p.team && e.hp > 0) {
+            let dx = p.x - e.x; let dy = p.y - e.y; let threshold = pRad + (e.r / 2) + 20;
+            if (dx*dx + dy*dy < threshold*threshold) { e.hp -= p.damage; addDamage(p.id, p.damage); e.lastCombatTime = frameCount; p.lastCombatTime = frameCount; p.hits++; }
+          }
         }
+        p.hasDamagedInDash = true; 
       }
-      if (p.edgarShots > 0) {
-        if (p.edgarTimer <= 0) {
-          fireEdgarPunch(p);
-          p.edgarShots--;
-          p.edgarTimer = 4; 
-        } else {
-          p.edgarTimer--;
+    } else {
+      if (p.isBot) {
+        if (frameCount - roundStartFrame > 60) {
+          let enemyData = getNearestEnemy(p);
+          if (enemyData.target) {
+            let target = enemyData.target;
+            let d = Math.sqrt(enemyData.distSq); // Square Root only calculated ONCE per bot!
+            let angleToEnemy = atan2(target.y - p.y, target.x - p.x); let range = BRAWLER_STATS[p.brawler].range;
+            
+            let optimalMinDist = range * 0.4; let optimalMaxDist = range * 0.8; let attackDist = range * 0.9;
+            if (p.brawler === "Piper") { optimalMinDist = range * 0.6; optimalMaxDist = range * 0.95; attackDist = range; } 
+            else if (p.brawler === "Edgar") { optimalMinDist = 10; optimalMaxDist = range * 0.9; attackDist = range * 1.1; } 
+            else if (p.brawler === "Shelly") { optimalMinDist = range * 0.1; optimalMaxDist = range * 0.6; attackDist = range * 0.8; }
+
+            let moveAngle = angleToEnemy; let isMoving = false;
+            if (p.hp < p.maxHp * 0.35 || d < optimalMinDist) { moveAngle = angleToEnemy + PI; isMoving = true; } 
+            else if (d > optimalMaxDist) { moveAngle = angleToEnemy; isMoving = true; }
+
+            if (isMoving) {
+              moveAngle += sin(frameCount * 0.05 + p.id.length) * 0.5;
+              if (checkWallCollision(p.x + cos(moveAngle) * (p.speed * 4), p.y + sin(moveAngle) * (p.speed * 4), pRad)) {
+                let leftAngle = moveAngle - PI / 2.5; let rightAngle = moveAngle + PI / 2.5;
+                if (!checkWallCollision(p.x + cos(leftAngle) * (p.speed * 3), p.y + sin(leftAngle) * (p.speed * 3), pRad)) moveAngle = leftAngle;
+                else if (!checkWallCollision(p.x + cos(rightAngle) * (p.speed * 3), p.y + sin(rightAngle) * (p.speed * 3), pRad)) moveAngle = rightAngle;
+              }
+              nextX += cos(moveAngle) * p.speed; nextY += sin(moveAngle) * p.speed;
+            }
+
+            if (d <= attackDist && p.cooldown <= 0 && p.ammo > 0) {
+              let fireChance = 0.03; 
+              if (p.brawler === "Edgar" && d <= BRAWLER_STATS["Edgar"].range) fireChance = 0.8; 
+              else if (p.brawler === "Shelly" && d <= BRAWLER_STATS["Shelly"].range * 0.6) fireChance = 0.4;
+              else if (p.brawler === "Piper" && d > range * 0.5) fireChance = 0.2; 
+              else if (p.brawler === "Frank") fireChance = 0.5;
+              
+              let useSuper = p.hits >= BRAWLER_STATS[p.brawler].hitsToSuper;
+              if (useSuper && p.brawler === "Edgar") fireChance = 0.9; 
+
+              if (random() < fireChance) {
+                if (["Dynamike", "Barley"].includes(p.brawler) || checkLineOfSight(p.x, p.y, target.x, target.y)) {
+                  shootProjectile(p, target, useSuper, angleToEnemy + random(-0.05, 0.05));
+                }
+              }
+            }
+          }
         }
-      }
-      if (p.coltShots > 0) {
-        if (p.coltTimer <= 0) {
-          fireColtBullet(p);
-          p.coltShots--;
-          p.coltTimer = 3; // Ultra-fast burst delay between shots
-        } else {
-          p.coltTimer--;
-        }
-      }
-    }
-  }
-
-  if (bluePlayer.cooldown > 0) bluePlayer.cooldown--;
-  if (redPlayer.cooldown > 0) redPlayer.cooldown--;
-
-  for (let p of [bluePlayer, redPlayer]) {
-    if (p.ammo < 3) {
-      p.reloadTimer++;
-      if (p.reloadTimer >= BRAWLER_STATS[p.brawler].reloadTime) {
-        p.ammo++; 
-        p.reloadTimer = 0; 
-      }
-    } else {
-      p.reloadTimer = 0; 
-    }
-  }
-
-  if (frameCount - bluePlayer.lastCombatTime > 180 && bluePlayer.hp > 0 && bluePlayer.hp < bluePlayer.maxHp) {
-    bluePlayer.hp = min(bluePlayer.maxHp, bluePlayer.hp + bluePlayer.maxHp * 0.002);
-  }
-  if (frameCount - redPlayer.lastCombatTime > 180 && redPlayer.hp > 0 && redPlayer.hp < redPlayer.maxHp) {
-    redPlayer.hp = min(redPlayer.maxHp, redPlayer.hp + redPlayer.maxHp * 0.002);
-  }
-
-  if (bluePlayer.invisTicks > 0) {
-    bluePlayer.invisTicks--;
-    if (bluePlayer.invisTicks <= 0) bluePlayer.isInvisible = false;
-  }
-  if (redPlayer.invisTicks > 0) {
-    redPlayer.invisTicks--;
-    if (redPlayer.invisTicks <= 0) redPlayer.isInvisible = false;
-  }
-
-  let bRad = bluePlayer.r / 2;
-  let rRad = redPlayer.r / 2;
-  let nextX, nextY; 
-
-  if (bluePlayer.stunTicks > 0) {
-    bluePlayer.stunTicks--;
-    if (!bluePlayer.isInvisible) {
-      fill("yellow");
-      textAlign(CENTER, CENTER);
-      textSize(20);
-      text("★", bluePlayer.x, bluePlayer.y - bluePlayer.r - 20);
-    }
-  } else if (bluePlayer.attackWindup > 0) {
-  } else if (bluePlayer.jumpTicks > 0) {
-    bluePlayer.jumpTicks--;
-    bluePlayer.x += bluePlayer.jumpVx;
-    bluePlayer.y += bluePlayer.jumpVy;
-    if (bluePlayer.jumpTicks === 0) resolveWallStuck(bluePlayer);
-  } else if (bluePlayer.dashTicks > 0) {
-    bluePlayer.dashTicks--;
-    nextX = bluePlayer.x + bluePlayer.dashVx;
-    nextY = bluePlayer.y + bluePlayer.dashVy;
-    if (!checkWallCollision(nextX, bluePlayer.y, bRad)) bluePlayer.x = nextX;
-    if (!checkWallCollision(bluePlayer.x, nextY, bRad)) bluePlayer.y = nextY;
-
-    if (!bluePlayer.hasDamagedInDash && dist(bluePlayer.x, bluePlayer.y, redPlayer.x, redPlayer.y) < bRad + rRad + 20) {
-      redPlayer.hp -= bluePlayer.damage;
-      blueTotalDamage += bluePlayer.damage;
-      redPlayer.lastCombatTime = frameCount;
-      bluePlayer.lastCombatTime = frameCount;
-      bluePlayer.hits++;
-      bluePlayer.hasDamagedInDash = true; 
-    }
-  } else {
-    nextY = bluePlayer.y;
-    nextX = bluePlayer.x;
-
-    let gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-    
-    if (useControllers && gamepads[0]) {
-      let gp = gamepads[0];
-      if (Math.abs(gp.axes[3]) > 0.2) nextY += gp.axes[3] * bluePlayer.speed;
-      if (Math.abs(gp.axes[2]) > 0.2) nextX += gp.axes[2] * bluePlayer.speed;
-    } else {
-      if (keyIsDown(87)) nextY -= bluePlayer.speed; 
-      if (keyIsDown(83)) nextY += bluePlayer.speed; 
-      if (keyIsDown(65)) nextX -= bluePlayer.speed; 
-      if (keyIsDown(68)) nextX += bluePlayer.speed; 
-    }
-
-    if (!checkWallCollision(bluePlayer.x, nextY, bRad)) bluePlayer.y = nextY;
-    if (!checkWallCollision(nextX, bluePlayer.y, bRad)) bluePlayer.x = nextX;
-  }
-
-  if (redPlayer.stunTicks > 0) {
-    redPlayer.stunTicks--;
-    if (!redPlayer.isInvisible) {
-      fill("yellow");
-      textAlign(CENTER, CENTER);
-      textSize(20);
-      text("★", redPlayer.x, redPlayer.y - redPlayer.r - 20);
-    }
-  } else if (redPlayer.attackWindup > 0) {
-  } else if (redPlayer.jumpTicks > 0) {
-    redPlayer.jumpTicks--;
-    redPlayer.x += redPlayer.jumpVx;
-    redPlayer.y += redPlayer.jumpVy;
-    if (redPlayer.jumpTicks === 0) resolveWallStuck(redPlayer);
-  } else if (redPlayer.dashTicks > 0) {
-    redPlayer.dashTicks--;
-    nextX = redPlayer.x + redPlayer.dashVx;
-    nextY = redPlayer.y + redPlayer.dashVy;
-    if (!checkWallCollision(nextX, redPlayer.y, rRad)) redPlayer.x = nextX;
-    if (!checkWallCollision(redPlayer.x, nextY, rRad)) redPlayer.y = nextY;
-
-    if (!redPlayer.hasDamagedInDash && dist(redPlayer.x, redPlayer.y, bluePlayer.x, bluePlayer.y) < bRad + rRad + 20) {
-      bluePlayer.hp -= redPlayer.damage;
-      redTotalDamage += redPlayer.damage;
-      bluePlayer.lastCombatTime = frameCount;
-      redPlayer.lastCombatTime = frameCount;
-      redPlayer.hits++;
-      redPlayer.hasDamagedInDash = true;
-    }
-  } else {
-    nextY = redPlayer.y;
-    nextX = redPlayer.x;
-
-    let gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-
-    if (useControllers && gamepads[1]) {
-      let gp = gamepads[1];
-      if (Math.abs(gp.axes[3]) > 0.2) nextY += gp.axes[3] * redPlayer.speed;
-      if (Math.abs(gp.axes[2]) > 0.2) nextX += gp.axes[2] * redPlayer.speed;
-    } else {
-      if (keyIsDown(UP_ARROW)) nextY -= redPlayer.speed;
-      if (keyIsDown(DOWN_ARROW)) nextY += redPlayer.speed;
-      if (keyIsDown(LEFT_ARROW)) nextX -= redPlayer.speed;
-      if (keyIsDown(RIGHT_ARROW)) nextX += redPlayer.speed;
-    }
-
-    if (!checkWallCollision(redPlayer.x, nextY, rRad)) redPlayer.y = nextY;
-    if (!checkWallCollision(nextX, redPlayer.y, rRad)) redPlayer.x = nextX;
-  }
-
-  bluePlayer.x = constrain(bluePlayer.x, bRad, width - bRad);
-  bluePlayer.y = constrain(bluePlayer.y, bRad, height - bRad);
-  redPlayer.x = constrain(redPlayer.x, rRad, width - rRad);
-  redPlayer.y = constrain(redPlayer.y, rRad, height - rRad);
-
-  let gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-
-  if (useControllers && gamepads[0]) {
-    let gp = gamepads[0];
-    let isAiming = Math.abs(gp.axes[0]) > 0.2 || Math.abs(gp.axes[1]) > 0.2;
-    let aimAngle = isAiming ? atan2(gp.axes[1], gp.axes[0]) : null;
-    
-    if (gp.buttons[7].pressed || gp.buttons[7].value > 0.5) shootProjectile(bluePlayer, redPlayer, false, aimAngle);
-    if (gp.buttons[6].pressed || gp.buttons[6].value > 0.5) shootProjectile(bluePlayer, redPlayer, true, aimAngle);
-  } else {
-    if (keyIsDown(69)) shootProjectile(bluePlayer, redPlayer, false); 
-    if (keyIsDown(81)) shootProjectile(bluePlayer, redPlayer, true);  
-  }
-
-  if (useControllers && gamepads[1]) {
-    let gp = gamepads[1];
-    let isAiming = Math.abs(gp.axes[0]) > 0.2 || Math.abs(gp.axes[1]) > 0.2;
-    let aimAngle = isAiming ? atan2(gp.axes[1], gp.axes[0]) : null;
-    
-    if (gp.buttons[7].pressed || gp.buttons[7].value > 0.5) shootProjectile(redPlayer, bluePlayer, false, aimAngle);
-    if (gp.buttons[6].pressed || gp.buttons[6].value > 0.5) shootProjectile(redPlayer, bluePlayer, true, aimAngle);
-  } else {
-    if (keyIsDown(16)) shootProjectile(redPlayer, bluePlayer, false); 
-    if (keyIsDown(191)) shootProjectile(redPlayer, bluePlayer, true); 
-  }
-
-  for (let i = smashEffects.length - 1; i >= 0; i--) {
-    let fx = smashEffects[i];
-    fx.life--;
-    push();
-    translate(fx.x, fx.y);
-    rotate(fx.angle);
-    fill(fx.isSuper ? color(241, 196, 15, fx.life * 15) : color(255, 50, 50, fx.life * 15));
-    noStroke();
-    beginShape();
-    vertex(0, 0);
-    let hs = fx.spread / 2;
-    vertex(cos(-hs) * fx.range, sin(-hs) * fx.range);
-    vertex(cos(hs) * fx.range, sin(hs) * fx.range);
-    endShape(CLOSE);
-    pop();
-    if (fx.life <= 0) smashEffects.splice(i, 1);
-  }
-
-  stroke("#c79f58");
-  strokeWeight(4);
-  fill("#b88b44"); 
-  rectMode(CORNER);
-  for (let w of walls) {
-    rect(w.x, w.y, w.w, w.h, 10);
-  }
-
-  for (let i = bombs.length - 1; i >= 0; i--) {
-    let b = bombs[i];
-    b.ticks--; 
-
-    if (b.isDynamike) {
-      push();
-      fill(b.radius > 50 ? "#8B4513" : "red"); 
-      rectMode(CENTER);
-      if (b.radius > 50) rect(b.x, b.y, 20, 24, 3);
-      else rect(b.x, b.y, 10, 20, 2);
-      
-      if (b.ticks % 10 < 5) {
-        fill("yellow");
-        circle(b.x, b.y - 10, 6);
-      }
-      pop();
-    } else {
-      fill(0);
-      noStroke();
-      circle(b.x, b.y, 14);
-      if (b.ticks % 10 < 5) {
-        fill("red");
-        circle(b.x, b.y, 8);
-      }
-    }
-
-    if (b.ticks <= 0) {
-      fill(255, 100, 0, 150);
-      let r = b.radius || 40; 
-      circle(b.x, b.y, r * 2);
-
-      let breaksWalls = (b.isDynamike && b.radius > 50) || !b.isDynamike; 
-      if (breaksWalls) {
-        for (let j = walls.length - 1; j >= 0; j--) {
-          let w = walls[j];
-          let testX = b.x;
-          let testY = b.y;
-          if (b.x < w.x) testX = w.x;
-          else if (b.x > w.x + w.w) testX = w.x + w.w;
-          if (b.y < w.y) testY = w.y;
-          else if (b.y > w.y + w.h) testY = w.y + w.h;
-
-          let distance = dist(b.x, b.y, testX, testY);
-          if (distance <= r) {
-            walls.splice(j, 1); 
+      } else {
+        if (p.id === "blue1") {
+          if (useControllers) {
+            if (gamepads[0]) {
+              if (Math.abs(gamepads[0].axes[3]) > 0.2) nextY += gamepads[0].axes[3] * p.speed;
+              if (Math.abs(gamepads[0].axes[2]) > 0.2) nextX += gamepads[0].axes[2] * p.speed;
+            }
+          } else {
+            if (keyIsDown(87)) nextY -= p.speed; if (keyIsDown(83)) nextY += p.speed; if (keyIsDown(65)) nextX -= p.speed; if (keyIsDown(68)) nextX += p.speed; 
+          }
+        } else if (p.id === "red1") {
+          if (useControllers) {
+            if (gamepads[1]) {
+              if (Math.abs(gamepads[1].axes[3]) > 0.2) nextY += gamepads[1].axes[3] * p.speed;
+              if (Math.abs(gamepads[1].axes[2]) > 0.2) nextX += gamepads[1].axes[2] * p.speed;
+            }
+          } else {
+            if (keyIsDown(UP_ARROW)) nextY -= p.speed; if (keyIsDown(DOWN_ARROW)) nextY += p.speed; if (keyIsDown(LEFT_ARROW)) nextX -= p.speed; if (keyIsDown(RIGHT_ARROW)) nextX += p.speed;
           }
         }
       }
+      if (!checkWallCollision(p.x, nextY, pRad)) p.y = nextY;
+      if (!checkWallCollision(nextX, p.y, pRad)) p.x = nextX;
+    }
+    p.x = constrain(p.x, pRad, width - pRad); p.y = constrain(p.y, pRad, height - pRad);
+  }
 
-      if (b.owner !== "blue" && dist(b.x, b.y, bluePlayer.x, bluePlayer.y) < bRad + r) {
-        bluePlayer.hp -= b.damage;
-        redTotalDamage += b.damage;
-        redPlayer.hits++;
-        bluePlayer.lastCombatTime = frameCount;
+  let p1 = activePlayers.find(pl => pl.id === "blue1");
+  if (p1 && p1.hp > 0 && !p1.isBot) {
+    let target = getNearestEnemy(p1).target;
+    if (useControllers) {
+      if (gamepads[0]) {
+        let isAiming = Math.abs(gamepads[0].axes[0]) > 0.2 || Math.abs(gamepads[0].axes[1]) > 0.2;
+        let aimAngle = isAiming ? atan2(gamepads[0].axes[1], gamepads[0].axes[0]) : null;
+        if (gamepads[0].buttons[7].pressed || gamepads[0].buttons[7].value > 0.5) shootProjectile(p1, target, false, aimAngle);
+        if (gamepads[0].buttons[6].pressed || gamepads[0].buttons[6].value > 0.5) shootProjectile(p1, target, true, aimAngle);
       }
-      if (b.owner !== "red" && dist(b.x, b.y, redPlayer.x, redPlayer.y) < rRad + r) {
-        redPlayer.hp -= b.damage;
-        blueTotalDamage += b.damage;
-        bluePlayer.hits++;
-        redPlayer.lastCombatTime = frameCount;
+    } else {
+      if (keyIsDown(69)) shootProjectile(p1, target, false); if (keyIsDown(81)) shootProjectile(p1, target, true);  
+    }
+  }
+
+  let p2 = activePlayers.find(pl => pl.id === "red1");
+  if (p2 && p2.hp > 0 && !p2.isBot) {
+    let target = getNearestEnemy(p2).target;
+    if (useControllers) {
+      if (gamepads[1]) {
+        let isAiming = Math.abs(gamepads[1].axes[0]) > 0.2 || Math.abs(gamepads[1].axes[1]) > 0.2;
+        let aimAngle = isAiming ? atan2(gamepads[1].axes[1], gamepads[1].axes[0]) : null;
+        if (gamepads[1].buttons[7].pressed || gamepads[1].buttons[7].value > 0.5) shootProjectile(p2, target, false, aimAngle);
+        if (gamepads[1].buttons[6].pressed || gamepads[1].buttons[6].value > 0.5) shootProjectile(p2, target, true, aimAngle);
+      }
+    } else {
+      if (keyIsDown(16)) shootProjectile(p2, target, false); if (keyIsDown(191)) shootProjectile(p2, target, true); 
+    }
+  }
+
+  for (let i = smashEffects.length - 1; i >= 0; i--) {
+    let fx = smashEffects[i]; fx.life--;
+    push(); translate(fx.x, fx.y); rotate(fx.angle); fill(fx.isSuper ? color(241, 196, 15, fx.life * 15) : color(255, 50, 50, fx.life * 15));
+    noStroke(); beginShape(); vertex(0, 0); vertex(cos(-fx.spread / 2) * fx.range, sin(-fx.spread / 2) * fx.range); vertex(cos(fx.spread / 2) * fx.range, sin(fx.spread / 2) * fx.range);
+    endShape(CLOSE); pop();
+    if (fx.life <= 0) smashEffects.splice(i, 1);
+  }
+
+  stroke("#c79f58"); strokeWeight(4); fill("#b88b44"); rectMode(CORNER);
+  for (let w of walls) { rect(w.x, w.y, w.w, w.h, 10); }
+
+  for (let i = bombs.length - 1; i >= 0; i--) {
+    let b = bombs[i]; b.ticks--; 
+    if (b.isDynamike) {
+      push(); fill(b.radius > 50 ? "#8B4513" : "red"); rectMode(CENTER);
+      if (b.radius > 50) rect(b.x, b.y, 20, 24, 3); else rect(b.x, b.y, 10, 20, 2);
+      if (b.ticks % 10 < 5) { fill("yellow"); circle(b.x, b.y - 10, 6); } pop();
+    } else {
+      fill(0); noStroke(); circle(b.x, b.y, 14); if (b.ticks % 10 < 5) { fill("red"); circle(b.x, b.y, 8); }
+    }
+
+    if (b.ticks <= 0) {
+      fill(255, 100, 0, 150); let r = b.radius || 40; circle(b.x, b.y, r * 2);
+      if ((b.isDynamike && b.radius > 50) || !b.isDynamike) {
+        for (let j = walls.length - 1; j >= 0; j--) {
+          let w = walls[j]; let testX = constrain(b.x, w.x, w.x + w.w); let testY = constrain(b.y, w.y, w.y + w.h);
+          if (dist(b.x, b.y, testX, testY) <= r) walls.splice(j, 1); 
+        }
+      }
+      for (let e of activePlayers) {
+        if (e.team !== b.ownerTeam && e.hp > 0) {
+          let dx = b.x - e.x; let dy = b.y - e.y; let threshold = r + e.r / 2;
+          if (dx*dx + dy*dy < threshold*threshold) {
+            e.hp -= b.damage; addDamage(b.owner, b.damage); e.lastCombatTime = frameCount;
+            let shooter = activePlayers.find(pl => pl.id === b.owner); if (shooter) shooter.hits++;
+          }
+        }
       }
       bombs.splice(i, 1); 
     }
   }
 
   for (let i = dougSplashes.length - 1; i >= 0; i--) {
-    let ds = dougSplashes[i];
-    ds.life--;
-    push();
-    fill(255, 105, 180, ds.life * 15); 
-    noStroke();
-    circle(ds.x, ds.y, ds.radius);
-    pop();
+    let ds = dougSplashes[i]; ds.life--;
+    push(); fill(255, 105, 180, ds.life * 15); noStroke(); circle(ds.x, ds.y, ds.radius); pop();
     if (ds.life <= 0) dougSplashes.splice(i, 1);
   }
 
   for (let i = puddles.length - 1; i >= 0; i--) {
-    let pd = puddles[i];
-    pd.ticks--;
-
-    push();
-    fill(255, 140, 0, 120); 
-    noStroke();
-    circle(pd.x, pd.y, pd.radius * 2);
-    pop();
-
+    let pd = puddles[i]; pd.ticks--;
+    push(); fill(255, 140, 0, 120); noStroke(); circle(pd.x, pd.y, pd.radius * 2); pop();
     if (pd.ticks % 30 === 0) {
-      if (pd.owner !== "blue" && dist(pd.x, pd.y, bluePlayer.x, bluePlayer.y) < pd.radius + bRad) {
-        bluePlayer.hp -= pd.damage;
-        redTotalDamage += pd.damage;
-        bluePlayer.lastCombatTime = frameCount;
-        redPlayer.hits++;
-      }
-      if (pd.owner !== "red" && dist(pd.x, pd.y, redPlayer.x, redPlayer.y) < pd.radius + rRad) {
-        redPlayer.hp -= pd.damage;
-        blueTotalDamage += pd.damage;
-        redPlayer.lastCombatTime = frameCount;
-        bluePlayer.hits++;
+      for (let e of activePlayers) {
+        if (e.team !== pd.ownerTeam && e.hp > 0) {
+          let dx = pd.x - e.x; let dy = pd.y - e.y; let threshold = pd.radius + e.r / 2;
+          if (dx*dx + dy*dy < threshold*threshold) {
+            e.hp -= pd.damage; addDamage(pd.owner, pd.damage); e.lastCombatTime = frameCount;
+            let shooter = activePlayers.find(pl => pl.id === pd.owner); if (shooter) shooter.hits++;
+          }
+        }
       }
     }
     if (pd.ticks <= 0) puddles.splice(i, 1);
   }
 
   for (let i = projectiles.length - 1; i >= 0; i--) {
-    let p = projectiles[i];
-    
-    p.x += p.vx;
-    p.y += p.vy;
-
-    let travelDist = dist(p.startX, p.startY, p.x, p.y);
-    if (travelDist > p.maxRange) {
-      p.active = false;
-    }
+    let p = projectiles[i]; p.x += p.vx; p.y += p.vy;
+    let travelDistSq = (p.startX - p.x)**2 + (p.startY - p.y)**2;
+    if (travelDistSq > (p.maxRange * p.maxRange)) p.active = false;
 
     if (p.isSuper && (p.brawlerName === "Colt" || p.brawlerName === "Shelly")) {
       for (let j = walls.length - 1; j >= 0; j--) {
-        let w = walls[j];
-        if (p.x >= w.x && p.x <= w.x + w.w && p.y >= w.y && p.y <= w.y + w.h) {
-          walls.splice(j, 1); 
-        }
+        let w = walls[j]; if (p.x >= w.x && p.x <= w.x + w.w && p.y >= w.y && p.y <= w.y + w.h) walls.splice(j, 1); 
       }
     }
 
     noStroke();
     if (p.brawlerName === "Dynamike") {
-      push();
-      fill(p.isSuper ? "#8B4513" : "red");
-      translate(p.x, p.y);
-      rotate(frameCount * 0.2); 
-      rectMode(CENTER);
-      if (p.isSuper) rect(0, 0, 20, 24, 3);
-      else rect(0, 0, 8, 16, 2);
-      pop();
+      push(); fill(p.isSuper ? "#8B4513" : "red"); translate(p.x, p.y); rotate(frameCount * 0.2); 
+      rectMode(CENTER); if (p.isSuper) rect(0, 0, 20, 24, 3); else rect(0, 0, 8, 16, 2); pop();
     } else if (p.isSuper) {
-      if (p.brawlerName === "Mortis") {
-        fill("#8e44ad");
-        push();
-        translate(p.x, p.y);
-        rotate(atan2(p.vy, p.vx)); 
-        ellipse(0, 0, 15, 40);
-        pop();
-      } else {
-        fill("#f1c40f"); 
-        circle(p.x, p.y, 18);
-      }
+      if (p.brawlerName === "Mortis") { fill("#8e44ad"); push(); translate(p.x, p.y); rotate(atan2(p.vy, p.vx)); ellipse(0, 0, 15, 40); pop(); } 
+      else { fill("#f1c40f"); circle(p.x, p.y, 18); }
     } else {
-      fill(p.owner === "blue" ? "#3498db" : "#e74c3c");
-      circle(p.x, p.y, 14);
+      fill(p.ownerTeam === "blue" ? "#3498db" : "#e74c3c"); circle(p.x, p.y, 14);
     }
 
-    if (!p.ignoresWalls && checkProjWallCollision(p.x, p.y)) {
-      p.active = false;
-    }
-
-    if (p.x < 0 || p.x > width || p.y < 0 || p.y > height) {
-      p.active = false;
-    }
+    if (!p.ignoresWalls && checkProjWallCollision(p.x, p.y)) p.active = false;
+    if (p.x < 0 || p.x > width || p.y < 0 || p.y > height) p.active = false;
 
     let hitRadius = p.isSuper && p.brawlerName === "Mortis" ? 20 : 7; 
     let hitEnemy = false;
 
-    if (p.owner !== "blue" && dist(p.x, p.y, bluePlayer.x, bluePlayer.y) < bRad + hitRadius) {
-      hitEnemy = true;
-      if (p.brawlerName !== "Barley" && p.brawlerName !== "Dynamike") {
-        let dmg = p.damage;
-        if (p.brawlerName === "Piper") {
-          dmg *= constrain(travelDist / p.maxRange, 0.3, 1.0);
-        }
-        bluePlayer.hp -= dmg;
-        redTotalDamage += dmg;
-        bluePlayer.lastCombatTime = frameCount;
-        redPlayer.lastCombatTime = frameCount;
-        redPlayer.hits++; 
-
-        if (p.isSuper && p.brawlerName === "Mortis") {
-          redPlayer.hp = min(redPlayer.hp + p.damage, redPlayer.maxHp); 
-        }
-        if (p.brawlerName === "Edgar") {
-          redPlayer.hp = min(redPlayer.hp + dmg * 0.5, redPlayer.maxHp); 
-        }
-      }
-    }
-    
-    if (p.owner !== "red" && dist(p.x, p.y, redPlayer.x, redPlayer.y) < rRad + hitRadius) {
-      hitEnemy = true;
-      if (p.brawlerName !== "Barley" && p.brawlerName !== "Dynamike") {
-        let dmg = p.damage;
-        if (p.brawlerName === "Piper") {
-          dmg *= constrain(travelDist / p.maxRange, 0.3, 1.0);
-        }
-        redPlayer.hp -= dmg;
-        blueTotalDamage += dmg;
-        redPlayer.lastCombatTime = frameCount;
-        bluePlayer.lastCombatTime = frameCount;
-        bluePlayer.hits++;
-
-        if (p.isSuper && p.brawlerName === "Mortis") {
-          bluePlayer.hp = min(bluePlayer.hp + p.damage, bluePlayer.maxHp);
-        }
-        if (p.brawlerName === "Edgar") {
-          bluePlayer.hp = min(bluePlayer.hp + dmg * 0.5, bluePlayer.maxHp);
+    for (let e of activePlayers) {
+      if (e.team !== p.ownerTeam && e.hp > 0) {
+        let dx = p.x - e.x; let dy = p.y - e.y; let threshold = (e.r / 2) + hitRadius;
+        if (dx*dx + dy*dy < threshold*threshold) {
+          hitEnemy = true;
+          if (p.brawlerName !== "Barley" && p.brawlerName !== "Dynamike") {
+            let dmg = p.damage; if (p.brawlerName === "Piper") dmg *= constrain(Math.sqrt(travelDistSq) / p.maxRange, 0.3, 1.0);
+            e.hp -= dmg; addDamage(p.owner, dmg); e.lastCombatTime = frameCount;
+            let shooter = activePlayers.find(pl => pl.id === p.owner);
+            if (shooter) {
+              shooter.hits++; shooter.lastCombatTime = frameCount;
+              if (p.isSuper && p.brawlerName === "Mortis") shooter.hp = min(shooter.hp + p.damage, shooter.maxHp); 
+              if (p.brawlerName === "Edgar") shooter.hp = min(shooter.hp + dmg * 0.5, shooter.maxHp); 
+            }
+          }
+          break; 
         }
       }
     }
 
-    if (hitEnemy) {
-      p.active = false;
-      p.hitEnemy = true;
-    }
+    if (hitEnemy) { p.active = false; p.hitEnemy = true; }
 
     if (!p.active) {
       if (p.brawlerName === "Barley") {
-        puddles.push({
-          x: p.x, y: p.y, radius: 45, damage: p.damage / 2, ticks: 180, owner: p.owner,
-        });
+        puddles.push({ x: p.x, y: p.y, radius: 45, damage: p.damage / 2, ticks: 180, owner: p.owner, ownerTeam: p.ownerTeam });
       } else if (p.brawlerName === "Dynamike") {
-        let blastRadius = p.isSuper ? 90 : 45;
-        let dmg = p.isSuper ? 4400 : 1600;
-        let fuse = p.hitEnemy ? 0 : 30; 
-        bombs.push({
-          x: p.x, y: p.y, ticks: fuse, damage: dmg, owner: p.owner, radius: blastRadius, isDynamike: true,
-        });
+        bombs.push({ x: p.x, y: p.y, ticks: p.hitEnemy ? 0 : 30, damage: p.isSuper ? 4400 : 1600, owner: p.owner, ownerTeam: p.ownerTeam, radius: p.isSuper ? 90 : 45, isDynamike: true, });
       }
       projectiles.splice(i, 1); 
     }
   }
 
   noStroke();
-
-  let blueAngle = atan2(redPlayer.y - bluePlayer.y, redPlayer.x - bluePlayer.x);
-  let redAngle = atan2(bluePlayer.y - redPlayer.y, bluePlayer.x - redPlayer.x);
-
-  if (bluePlayer.hp > 0 && !bluePlayer.isInvisible) {
-    if (bluePlayer.hits >= BRAWLER_STATS[bluePlayer.brawler].hitsToSuper) {
-      noFill();
-      stroke("yellow");
-      strokeWeight(4);
-      circle(bluePlayer.x, bluePlayer.y, bluePlayer.r + 15);
-      noStroke();
-    }
-
-    fill(0, 0, 0, 50); 
-    ellipse(bluePlayer.x, bluePlayer.y + bRad, bluePlayer.r, bRad);
-    fill("#3498db"); 
-    circle(bluePlayer.x, bluePlayer.y, bluePlayer.r);
-
-    drawWeapon(bluePlayer, blueAngle);
-
-    if (bluePlayer.hotdogTicks > 0) {
-      push();
-      fill("#d2691e");
-      rectMode(CENTER);
-      rect(bluePlayer.x, bluePlayer.y - bRad - 5, 24, 10, 5);
-      fill("#e74c3c");
-      rect(bluePlayer.x, bluePlayer.y - bRad - 5, 28, 6, 5);
-      pop();
+  for (let p of activePlayers) {
+    if (p.hp > 0 && !p.isInvisible) {
+      if (p.hits >= BRAWLER_STATS[p.brawler].hitsToSuper) { noFill(); stroke("yellow"); strokeWeight(4); circle(p.x, p.y, p.r + 15); noStroke(); }
+      fill(0, 0, 0, 50); ellipse(p.x, p.y + p.r / 2, p.r, p.r / 2); fill(p.team === "blue" ? "#3498db" : "#e74c3c"); circle(p.x, p.y, p.r);
+      let aimAngle = 0; let target = getNearestEnemy(p).target; if (target) aimAngle = atan2(target.y - p.y, target.x - p.x);
+      drawWeapon(p, aimAngle);
+      if (p.hotdogTicks > 0) { push(); fill("#d2691e"); rectMode(CENTER); rect(p.x, p.y - p.r / 2 - 5, 24, 10, 5); fill("#e74c3c"); rect(p.x, p.y - p.r / 2 - 5, 28, 6, 5); pop(); }
     }
   }
 
-  if (redPlayer.hp > 0 && !redPlayer.isInvisible) {
-    if (redPlayer.hits >= BRAWLER_STATS[redPlayer.brawler].hitsToSuper) {
-      noFill();
-      stroke("yellow");
-      strokeWeight(4);
-      circle(redPlayer.x, redPlayer.y, redPlayer.r + 15);
-      noStroke();
-    }
-
-    fill(0, 0, 0, 50);
-    ellipse(redPlayer.x, redPlayer.y + rRad, redPlayer.r, rRad);
-    fill("#e74c3c");
-    circle(redPlayer.x, redPlayer.y, redPlayer.r);
-
-    drawWeapon(redPlayer, redAngle);
-
-    if (redPlayer.hotdogTicks > 0) {
-      push();
-      fill("#d2691e");
-      rectMode(CENTER);
-      rect(redPlayer.x, redPlayer.y - rRad - 5, 24, 10, 5);
-      fill("#e74c3c");
-      rect(redPlayer.x, redPlayer.y - rRad - 5, 28, 6, 5);
-      pop();
-    }
-  }
-
-  let barW = 60; 
-  let barH = 10;
-  rectMode(CENTER);
-
-  if (bluePlayer.hp > 0 && !bluePlayer.isInvisible) {
-    fill(0); 
-    rectMode(CENTER);
-    rect(bluePlayer.x, bluePlayer.y - bluePlayer.r - 10, barW + 4, barH + 4, 4);
-    fill("#2ecc71"); 
-    
-    let hpPctB = max(0, bluePlayer.hp / bluePlayer.maxHp);
-    rectMode(CORNER);
-    rect(
-      bluePlayer.x - barW / 2,
-      bluePlayer.y - bluePlayer.r - 10 - barH / 2,
-      barW * hpPctB,
-      barH,
-      2
-    );
-    
-    fill(255);
-    textSize(10);
-    textAlign(CENTER, CENTER);
-    text(Math.floor(bluePlayer.hp), bluePlayer.x, bluePlayer.y - bluePlayer.r - 10);
-
-    let ammoY = bluePlayer.y - bluePlayer.r + 2;
-    fill(0);
-    rectMode(CENTER);
-    rect(bluePlayer.x, ammoY, barW + 4, 6, 2);
-    rectMode(CORNER);
-    let segW = barW / 3; 
-    for (let i = 0; i < 3; i++) {
-      if (i < bluePlayer.ammo) {
-        fill("#f39c12"); 
-        rect(bluePlayer.x - barW / 2 + i * segW + 1, ammoY - 2, segW - 2, 4, 1);
-      } else if (i === bluePlayer.ammo) {
-        fill(255, 165, 0, 100); 
-        let reloadPct = bluePlayer.reloadTimer / BRAWLER_STATS[bluePlayer.brawler].reloadTime;
-        rect(
-          bluePlayer.x - barW / 2 + i * segW + 1,
-          ammoY - 2,
-          (segW - 2) * reloadPct,
-          4,
-          1
-        );
-      }
-    }
-  }
-
-  if (redPlayer.hp > 0 && !redPlayer.isInvisible) {
-    fill(0);
-    rectMode(CENTER);
-    rect(redPlayer.x, redPlayer.y - redPlayer.r - 10, barW + 4, barH + 4, 4);
-    fill("#2ecc71");
-    let hpPctR = max(0, redPlayer.hp / redPlayer.maxHp);
-    rectMode(CORNER);
-    rect(
-      redPlayer.x - barW / 2,
-      redPlayer.y - redPlayer.r - 10 - barH / 2,
-      barW * hpPctR,
-      barH,
-      2
-    );
-    fill(255);
-    textSize(10);
-    textAlign(CENTER, CENTER);
-    text(Math.floor(redPlayer.hp), redPlayer.x, redPlayer.y - redPlayer.r - 10);
-
-    let ammoY = redPlayer.y - redPlayer.r + 2;
-    fill(0);
-    rectMode(CENTER);
-    rect(redPlayer.x, ammoY, barW + 4, 6, 2);
-    rectMode(CORNER);
-    let segW = barW / 3;
-    for (let i = 0; i < 3; i++) {
-      if (i < redPlayer.ammo) {
-        fill("#f39c12");
-        rect(redPlayer.x - barW / 2 + i * segW + 1, ammoY - 2, segW - 2, 4, 1);
-      } else if (i === redPlayer.ammo) {
-        fill(255, 165, 0, 100);
-        let reloadPct = redPlayer.reloadTimer / BRAWLER_STATS[redPlayer.brawler].reloadTime;
-        rect(
-          redPlayer.x - barW / 2 + i * segW + 1,
-          ammoY - 2,
-          (segW - 2) * reloadPct,
-          4,
-          1
-        );
+  let barW = 60; let barH = 10;
+  for (let p of activePlayers) {
+    if (p.hp > 0 && !p.isInvisible) {
+      fill(0); rectMode(CENTER); rect(p.x, p.y - p.r - 10, barW + 4, barH + 4, 4);
+      fill("#2ecc71"); rectMode(CORNER); rect(p.x - barW / 2, p.y - p.r - 10 - barH / 2, barW * max(0, p.hp / p.maxHp), barH, 2);
+      fill(255); textSize(10); textAlign(CENTER, CENTER); text(Math.floor(p.hp), p.x, p.y - p.r - 10);
+      let ammoY = p.y - p.r + 2; fill(0); rectMode(CENTER); rect(p.x, ammoY, barW + 4, 6, 2); rectMode(CORNER); let segW = barW / 3; 
+      for (let i = 0; i < 3; i++) {
+        if (i < p.ammo) { fill("#f39c12"); rect(p.x - barW / 2 + i * segW + 1, ammoY - 2, segW - 2, 4, 1); } 
+        else if (i === p.ammo) { fill(255, 165, 0, 100); rect(p.x - barW / 2 + i * segW + 1, ammoY - 2, (segW - 2) * (p.reloadTimer / BRAWLER_STATS[p.brawler].reloadTime), 4, 1); }
       }
     }
   }
 
   rectMode(CORNER);
+  let primaryBlue = activePlayers.find(pl => pl.id === "blue1");
+  if (primaryBlue) {
+    fill(0, 150); rect(20, height - 100, 360, 80, 10); fill(255); textAlign(LEFT, TOP); textSize(20);
+    let bProj = BRAWLER_STATS[primaryBlue.brawler].projectiles; text(`${primaryBlue.brawler} - ATK: ${bProj > 1 ? `${primaryBlue.damage} (x${bProj})` : primaryBlue.damage}`, 30, height - 90);
+    textSize(14); fill(200); text(`${primaryBlue.superDesc}\nE to Attack | Q to Super`, 30, height - 60);
+  }
 
-  fill(0, 150);
-  rect(20, height - 100, 360, 80, 10);
-  fill(255);
-  textAlign(LEFT, TOP);
-  textSize(20);
+  let primaryRed = activePlayers.find(pl => pl.id === "red1");
+  if (primaryRed) {
+    fill(0, 150); rect(width - 380, height - 100, 360, 80, 10); fill(255); textAlign(RIGHT, TOP); textSize(20);
+    let rProj = BRAWLER_STATS[primaryRed.brawler].projectiles; text(`ATK: ${rProj > 1 ? `${primaryRed.damage} (x${rProj})` : primaryRed.damage} - ${primaryRed.brawler}`, width - 30, height - 90);
+    textSize(14); fill(200); text(`${primaryRed.superDesc}\nSHIFT to Attack | / to Super`, width - 30, height - 60);
+  }
 
-  let bProj = BRAWLER_STATS[bluePlayer.brawler].projectiles;
-  let bDmgText = bProj > 1 ? `${bluePlayer.damage} (x${bProj})` : bluePlayer.damage;
-  text(`${bluePlayer.brawler} - ATK: ${bDmgText}`, 30, height - 90);
+  fill(0, 150); noStroke(); textSize(20); textAlign(LEFT, TOP); text("ESC = Lobby | Blue: WASD | Red: Arrows", 20, 20);
 
-  textSize(14);
-  fill(200);
-  text(`${bluePlayer.superDesc}\nE to Attack | Q to Super`, 30, height - 60);
+  push(); fill(0, 0, 0, 150); rectMode(CORNER); rect(10, height - 145, 120, 40, 8); rect(width - 130, height - 145, 120, 40, 8); 
+  fill("#f1c40f"); textSize(24); textAlign(LEFT, TOP); text(`WINS: ${blueWins}`, 20, height - 135); textAlign(RIGHT, TOP); text(`WINS: ${redWins}`, width - 20, height - 135); pop();
 
-  fill(0, 150);
-  rect(width - 380, height - 100, 360, 80, 10);
-  fill(255);
-  textAlign(RIGHT, TOP);
-  textSize(20);
+  for (let p of activePlayers) { if (p.hp <= 0 && p.hotdogTicks > 0) { p.hp = p.maxHp; p.hotdogTicks = 0; } }
 
-  let rProj = BRAWLER_STATS[redPlayer.brawler].projectiles;
-  let rDmgText = rProj > 1 ? `${redPlayer.damage} (x${rProj})` : redPlayer.damage;
-  text(`ATK: ${rDmgText} - ${redPlayer.brawler}`, width - 30, height - 90);
-
-  textSize(14);
-  fill(200);
-  text(`${redPlayer.superDesc}\nSHIFT to Attack | / to Super`, width - 30, height - 60);
-
-  fill(0, 150);
-  noStroke();
-  textSize(20);
-  textAlign(LEFT, TOP);
-  text("ESC = Lobby | Blue: WASD | Red: Arrows", 20, 20);
-
-  push();
-  fill(0, 0, 0, 150); 
-  rectMode(CORNER);
-  rect(10, height - 145, 120, 40, 8); 
-  rect(width - 130, height - 145, 120, 40, 8); 
+  let blueAlive = activePlayers.some(p => p.team === "blue" && p.hp > 0);
+  let redAlive = activePlayers.some(p => p.team === "red" && p.hp > 0);
   
-  fill("#f1c40f");
-  textSize(24);
-  textAlign(LEFT, TOP);
-  text(`WINS: ${blueWins}`, 20, height - 135);
-  textAlign(RIGHT, TOP);
-  text(`WINS: ${redWins}`, width - 20, height - 135);
-  pop();
-
-  if (bluePlayer.hp <= 0 && bluePlayer.hotdogTicks > 0) {
-    bluePlayer.hp = bluePlayer.maxHp;
-    bluePlayer.hotdogTicks = 0; 
-  }
-  if (redPlayer.hp <= 0 && redPlayer.hotdogTicks > 0) {
-    redPlayer.hp = redPlayer.maxHp;
-    redPlayer.hotdogTicks = 0;
-  }
-
   let roundOver = false;
-  if (bluePlayer.hp <= 0 && redPlayer.hp <= 0) {
-    roundOver = true; 
-  } else if (bluePlayer.hp <= 0) {
-    redWins++; 
-    roundOver = true;
-  } else if (redPlayer.hp <= 0) {
-    blueWins++; 
-    roundOver = true;
-  }
+  if (!blueAlive && !redAlive) roundOver = true; 
+  else if (!blueAlive) { redWins++; roundOver = true; } 
+  else if (!redAlive) { blueWins++; roundOver = true; }
 
   if (roundOver) {
     if (blueWins >= 2 || redWins >= 2) {
       if (blueWins === redWins) lastWinner = "tie";
       else if (blueWins > redWins) { lastWinner = "blue"; blueTotalWins++; }
-      else { lastWinner = "red"; redTotalWins++; }
-
-      gameState = "LOBBY"; 
-      gameMusic.pause();
-      lobbyMusic.play().catch((e) => {}); 
-    } else {
-      startNextRound();
-    }
+      else { lastWinner = "red"; if (!cpuMode) redTotalWins++; }
+      gameState = "LOBBY"; gameMusic.pause(); lobbyMusic.play().catch((e) => {}); 
+    } else { startNextRound(); }
   }
 }
 
 function renderStaticBackground() {
-  bgGraphics.background("#1a2a6c");
-  let center_x = bgGraphics.width / 2;
-  let center_y = bgGraphics.height / 2;
-
+  bgGraphics.background("#1a2a6c"); let center_x = bgGraphics.width / 2; let center_y = bgGraphics.height / 2;
   bgGraphics.noFill();
   for (let r = max(bgGraphics.width, bgGraphics.height); r > 0; r -= 15) {
-    let inter = map(r, 0, max(bgGraphics.width, bgGraphics.height), 0, 1);
-    let c = lerpColor(color("#11998e"), color("#38ef7d"), inter); 
-    bgGraphics.stroke(c);
-    bgGraphics.strokeWeight(16);
-    bgGraphics.ellipse(center_x, center_y, r, r * 0.8);
+    bgGraphics.stroke(lerpColor(color("#11998e"), color("#38ef7d"), map(r, 0, max(bgGraphics.width, bgGraphics.height), 0, 1))); 
+    bgGraphics.strokeWeight(16); bgGraphics.ellipse(center_x, center_y, r, r * 0.8);
   }
-
-  bgGraphics.fill(0, 0, 0, 80);
-  bgGraphics.noStroke();
-  bgGraphics.ellipse(
-    bgGraphics.width / 2,
-    bgGraphics.height / 2 + 120,
-    400,
-    100
-  );
+  bgGraphics.fill(0, 0, 0, 80); bgGraphics.noStroke(); bgGraphics.ellipse(bgGraphics.width / 2, bgGraphics.height / 2 + 120, 400, 100);
 }
 
-function drawBackground() {
-  if (bgGraphics && bgGraphics.width > 0 && bgGraphics.height > 0) {
-    imageMode(CORNER);
-    image(bgGraphics, 0, 0);
-  } else {
-    background("#1a2a6c"); 
-  }
-}
+function drawBackground() { if (bgGraphics && bgGraphics.width > 0) { imageMode(CORNER); image(bgGraphics, 0, 0); } else background("#1a2a6c"); }
 
 function drawMenus() {
-  let menuItems = ["<- BACK"].concat(brawlerList); 
-  let itemHeight = height / menuItems.length; 
-
+  let menuItems = ["<- BACK"].concat(brawlerList); let itemHeight = height / menuItems.length; 
   if (leftMenuOpen) {
-    fill(0, 0, 0, 230); 
-    rectMode(CORNER);
-    rect(0, 0, width / 2, height);
-    
+    fill(0, 0, 0, 230); rectMode(CORNER); rect(0, 0, width / 2, height);
     for (let i = 0; i < menuItems.length; i++) {
       let y = i * itemHeight;
-      if (mouseX > 0 && mouseX < width / 2 && mouseY > y && mouseY < y + itemHeight) {
-        fill(255, 255, 255, 40); 
-        rect(0, y, width / 2, itemHeight);
-      }
-      stroke(255, 255, 255, 50);
-      strokeWeight(1);
-      line(0, y + itemHeight, width / 2, y + itemHeight); 
-      
-      if (i === 0) fill(255, 100, 100); 
-      else fill(255);
-      
-      noStroke();
-      textAlign(CENTER, CENTER);
-      textSize(min(itemHeight * 0.4, 40));
-      text(menuItems[i], width / 4, y + itemHeight / 2 - 5);
+      if (mouseX > 0 && mouseX < width / 2 && mouseY > y && mouseY < y + itemHeight) { fill(255, 255, 255, 40); rect(0, y, width / 2, itemHeight); }
+      stroke(255, 255, 255, 50); strokeWeight(1); line(0, y + itemHeight, width / 2, y + itemHeight); 
+      if (i === 0) fill(255, 100, 100); else fill(255);
+      noStroke(); textAlign(CENTER, CENTER); textSize(min(itemHeight * 0.4, 40)); text(menuItems[i], width / 4, y + itemHeight / 2 - 5);
     }
   }
-
   if (rightMenuOpen) {
-    fill(0, 0, 0, 230);
-    rectMode(CORNER);
-    rect(width / 2, 0, width / 2, height);
+    fill(0, 0, 0, 230); rectMode(CORNER); rect(width / 2, 0, width / 2, height);
     for (let i = 0; i < menuItems.length; i++) {
       let y = i * itemHeight;
-      if (mouseX > width / 2 && mouseX < width && mouseY > y && mouseY < y + itemHeight) {
-        fill(255, 255, 255, 40);
-        rect(width / 2, y, width / 2, itemHeight);
-      }
-      stroke(255, 255, 255, 50);
-      strokeWeight(1);
-      line(width / 2, y + itemHeight, width, y + itemHeight);
-      if (i === 0) fill(255, 100, 100);
-      else fill(255);
-      noStroke();
-      textAlign(CENTER, CENTER);
-      textSize(min(itemHeight * 0.4, 40));
-      text(menuItems[i], width * 0.75, y + itemHeight / 2 - 5);
+      if (mouseX > width / 2 && mouseX < width && mouseY > y && mouseY < y + itemHeight) { fill(255, 255, 255, 40); rect(width / 2, y, width / 2, itemHeight); }
+      stroke(255, 255, 255, 50); strokeWeight(1); line(width / 2, y + itemHeight, width, y + itemHeight);
+      if (i === 0) fill(255, 100, 100); else fill(255);
+      noStroke(); textAlign(CENTER, CENTER); textSize(min(itemHeight * 0.4, 40)); text(menuItems[i], width * 0.75, y + itemHeight / 2 - 5);
     }
   }
 }
 
 function mousePressed() {
+  if (gameState === "SPLASH") {
+    if (splashStartBtn && splashStartBtn.isClicked()) {
+      gameState = "LOADING";
+      lobbyMusic.play().catch(e => console.log("Audio unlocked!"));
+      beginLoadingAssets(); // Begin pulling in heavy assets
+    }
+    return;
+  }
+
   if (gameState !== "LOBBY") return; 
-
-  let menuItems = ["<- BACK"].concat(brawlerList);
-  let itemHeight = height / menuItems.length;
-
+  let menuItems = ["<- BACK"].concat(brawlerList); let itemHeight = height / menuItems.length;
   if (leftMenuOpen && mouseX < width / 2) {
     let index = floor(mouseY / itemHeight); 
-    if (index === 0) {
-      leftMenuOpen = false; 
-    } else if (index > 0 && index < menuItems.length) {
-      players[0].name = menuItems[index]; 
-      leftMenuOpen = false;
-    }
+    if (index === 0) leftMenuOpen = false; 
+    else if (index > 0 && index < menuItems.length) { players[0].name = menuItems[index]; leftMenuOpen = false; }
     return;
   }
-
   if (rightMenuOpen && mouseX > width / 2) {
     let index = floor(mouseY / itemHeight);
-    if (index === 0) {
-      rightMenuOpen = false;
-    } else if (index > 0 && index < menuItems.length) {
-      players[1].name = menuItems[index];
-      rightMenuOpen = false;
-    }
+    if (index === 0) rightMenuOpen = false; 
+    else if (index > 0 && index < menuItems.length) { players[1].name = menuItems[index]; rightMenuOpen = false; }
     return;
   }
-
-  if (controllerSwitch && controllerSwitch.isClicked(mouseX, mouseY)) {
-    return; 
-  }
+  if (controllerSwitch && controllerSwitch.isClicked()) return; 
+  if (cpuSwitch && cpuSwitch.isClicked()) return; 
 
   for (let btn of buttons) {
-    if (btn.isClicked(mouseX, mouseY)) {
-      if (btn.id === "play") {
-        gameState = "GAME";
-        lobbyMusic.pause(); 
-        gameMusic.currentTime = 0; 
-        gameMusic.play().catch((e) => {});
-        initGame(); 
-      } else if (btn.id === "brawlers_left") {
-        leftMenuOpen = !leftMenuOpen; 
-      } else if (btn.id === "brawlers_right") {
-        rightMenuOpen = !rightMenuOpen;
-      }
+    if (btn.isClicked()) {
+      if (btn.id === "play") { gameState = "GAME"; lobbyMusic.pause(); gameMusic.currentTime = 0; gameMusic.play().catch((e) => {}); initGame(); } 
+      else if (btn.id === "brawlers_left") leftMenuOpen = !leftMenuOpen; 
+      else if (btn.id === "brawlers_right") rightMenuOpen = !rightMenuOpen;
     }
   }
 }
 
 function keyPressed() {
-  if (keyCode === ESCAPE && gameState === "GAME") {
-    gameState = "LOBBY";
-    gameMusic.pause();
-    lobbyMusic.play().catch((e) => {});
-  }
-  if ((key === 't' || key === 'T') && gameState === "LOBBY") {
-    showLobbyTitle = !showLobbyTitle;
-  }
+  if (keyCode === ESCAPE && gameState === "GAME") { gameState = "LOBBY"; gameMusic.pause(); lobbyMusic.play().catch((e) => {}); }
+  if ((key === 't' || key === 'T') && gameState === "LOBBY") showLobbyTitle = !showLobbyTitle;
 }
 
 function windowResized() {
   if (windowWidth > 0 && windowHeight > 0) {
-    resizeCanvas(windowWidth, windowHeight);
-    bgGraphics = createGraphics(windowWidth, windowHeight);
-    renderStaticBackground();
-
-    if (gameState === "LOBBY") initScene();
-    else if (gameState === "GAME") initMap();
+    resizeCanvas(windowWidth, windowHeight); bgGraphics = createGraphics(windowWidth, windowHeight); renderStaticBackground();
+    if (gameState === "LOBBY") initScene(); else if (gameState === "GAME") initMap();
   }
 }
     </script>
