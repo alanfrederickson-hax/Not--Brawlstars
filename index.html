@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BrawlStars 2.0</title>
     
+    <!-- NEW: Browser Tab Icon (Favicon) -->
+    <link rel="icon" type="image/png" href="./BrawlTard">
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet">
@@ -60,6 +63,7 @@ let redTotalWins = 0;
 let blueTotalDamage = 0; 
 let redTotalDamage = 0;  
 let useControllers = false; 
+let showLobbyTitle = true;
 
 let bluePlayer = {
   id: "blue",
@@ -1071,6 +1075,17 @@ function draw() {
 function drawLobby() {
   drawBackground(); 
   
+  if (showLobbyTitle) {
+    push();
+    fill("#ff2e43"); 
+    stroke("#000000");
+    strokeWeight(8);
+    textAlign(CENTER, TOP);
+    textSize(80);
+    text("BrawlTards", width / 2, 40);
+    pop();
+  }
+
   for (let player of players) {
     player.update();
     player.draw();
@@ -1957,6 +1972,9 @@ function keyPressed() {
     gameState = "LOBBY";
     gameMusic.pause();
     lobbyMusic.play().catch((e) => {});
+  }
+  if ((key === 't' || key === 'T') && gameState === "LOBBY") {
+    showLobbyTitle = !showLobbyTitle;
   }
 }
 
