@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BrawlStars 2.0</title>
     
-    <link rel="icon" type="image/png" href="./Logo.png">
+    <link rel="icon" type="image/png" href="BrawlTard.png">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -171,9 +171,13 @@ class Player {
 }
 
 function preload() {
-  // Load ONLY the splash screen assets here to prevent black screen lag
-  loadFont('./LilitaOne.ttf', (f) => { customFont = f; });
-  loadImage('./Logo.png', (img) => { brawlerImages["Logo"] = img; });
+  let isPreview = window.location.protocol === 'data:' || window.location.protocol === 'blob:' || window.location.hostname.includes("usercontent.goog");
+  if (!isPreview) {
+    try {
+      loadFont('./LilitaOne.ttf', (f) => { customFont = f; });
+    } catch (e) {}
+  }
+  loadImage('BrawlTard.png', (img) => { brawlerImages["Logo"] = img; }, (err) => {});
 }
 
 // NEW: Asynchronously load all heavy character assets AFTER the user clicks start!
@@ -573,7 +577,7 @@ function drawSplash() {
     push(); fill(255); textAlign(CENTER, CENTER); textSize(60);
     let scalePulse = 1.0 + sin(frameCount * 0.05) * 0.05;
     translate(width / 2, height / 2 - 50); scale(scalePulse);
-    text("BRAWL STARS 2.0", 0, 0);
+    text("BrawlTards", 0, 0);
     pop();
   }
 
