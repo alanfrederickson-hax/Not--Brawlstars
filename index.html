@@ -549,6 +549,7 @@ function startNextRound() {
   bluePlayer.attackWindup = 0;
   bluePlayer.leonShots = 0;
   bluePlayer.edgarShots = 0;
+  bluePlayer.coltShots = 0;
   bluePlayer.lastCombatTime = frameCount; 
   bluePlayer.dashTicks = 0;
   bluePlayer.jumpTicks = 0;
@@ -566,6 +567,7 @@ function startNextRound() {
   redPlayer.attackWindup = 0;
   redPlayer.leonShots = 0;
   redPlayer.edgarShots = 0;
+  redPlayer.coltShots = 0;
   redPlayer.lastCombatTime = frameCount;
   redPlayer.dashTicks = 0;
   redPlayer.jumpTicks = 0;
@@ -593,6 +595,19 @@ function checkProjWallCollision(px, py) {
     }
   }
   return false;
+}
+
+function checkLineOfSight(x1, y1, x2, y2) {
+  let d = dist(x1, y1, x2, y2);
+  let steps = Math.max(1, d / 10); // Check every 10 pixels along the path
+  for (let i = 0; i <= steps; i++) {
+    let px = lerp(x1, x2, i / steps);
+    let py = lerp(y1, y2, i / steps);
+    if (checkProjWallCollision(px, py)) {
+      return false; // The line of sight hit a wall!
+    }
+  }
+  return true; // The path is clear
 }
 
 function resolveWallStuck(player) {
@@ -781,7 +796,17 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     return;
   }
 
-  let ignoresWalls = ["Doug", "Dynamike", "Barley"].includes(shooter.brawler) || (shooter.brawler === "Colt" && isSuper);
+  if (shooter.brawler === "Colt") {
+    let projCount = isSuper ? BRAWLER_STATS["Colt"].superProjectiles : BRAWLER_STATS["Colt"].projectiles;
+    shooter.coltShots = projCount;
+    shooter.coltTimer = 0; 
+    shooter.coltAngle = angle;
+    shooter.coltIsSuper = isSuper;
+    shooter.cooldown = shooter.maxCooldown;
+    return; 
+  }
+
+  let ignoresWalls = ["Doug", "Dynamike", "Barley"].includes(shooter.brawler);
   let projCount = isSuper ? BRAWLER_STATS[shooter.brawler].superProjectiles : BRAWLER_STATS[shooter.brawler].projectiles;
 
   for (let i = 0; i < projCount; i++) {
@@ -791,9 +816,7 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     let spawnY = shooter.y;
 
     if (projCount > 1) {
-      if (shooter.brawler === "Colt") {
-        speed = 12 - i * (isSuper ? 1.0 : 1.5);
-      } else if (shooter.brawler === "Dynamike" && !isSuper) {
+      if (shooter.brawler === "Dynamike" && !isSuper) {
         let perpAngle = angle + PI / 2; 
         let offset = i === 0 ? -12 : 12; 
         spawnX += cos(perpAngle) * offset;
@@ -836,14 +859,22 @@ function executeFrankSmash(frank, enemy) {
     while (diff < -PI) diff += TWO_PI;
 
     if (abs(diff) <= spreadAngle / 2) {
-      enemy.hp -= frank.damage;
-      if (frank.id === "blue") blueTotalDamage += frank.damage;
-      else redTotalDamage += frank.damage;
-      frank.hits++;
-      frank.lastCombatTime = frameCount;
-      enemy.lastCombatTime = frameCount;
-      if (frank.windupIsSuper) {
-        enemy.stunTicks = floor(2.48 * 60); 
+      // Check Line of Sight if it's a normal attack (Super pierces walls)
+      let canHit = true;
+      if (!frank.windupIsSuper) {
+        canHit = checkLineOfSight(frank.x, frank.y, enemy.x, enemy.y);
+      }
+
+      if (canHit) {
+        enemy.hp -= frank.damage;
+        if (frank.id === "blue") blueTotalDamage += frank.damage;
+        else redTotalDamage += frank.damage;
+        frank.hits++;
+        frank.lastCombatTime = frameCount;
+        enemy.lastCombatTime = frameCount;
+        if (frank.windupIsSuper) {
+          enemy.stunTicks = floor(2.48 * 60); 
+        }
       }
     }
   }
@@ -851,19 +882,37 @@ function executeFrankSmash(frank, enemy) {
   if (frank.windupIsSuper) {
     for (let i = walls.length - 1; i >= 0; i--) {
       let w = walls[i];
-      let wx = w.x + w.w / 2;
-      let wy = w.y + w.h / 2;
-      let distToWall = dist(frank.x, frank.y, wx, wy);
+      
+      // Test multiple points on the wall to ensure reliable breaking (corners, center, and closest edge)
+      let cx = constrain(frank.x, w.x, w.x + w.w); 
+      let cy = constrain(frank.y, w.y, w.y + w.h);
+      
+      let testPoints = [
+        {x: w.x, y: w.y}, 
+        {x: w.x + w.w, y: w.y}, 
+        {x: w.x, y: w.y + w.h}, 
+        {x: w.x + w.w, y: w.y + w.h}, 
+        {x: w.x + w.w / 2, y: w.y + w.h / 2}, 
+        {x: cx, y: cy} 
+      ];
 
-      if (distToWall <= range + Math.max(w.w, w.h) / 2) {
-        let angleToWall = atan2(wy - frank.y, wx - frank.x);
-        let diff = angleToWall - frank.windupAngle;
-        while (diff > PI) diff -= TWO_PI;
-        while (diff < -PI) diff += TWO_PI;
+      let hitWall = false;
+      for (let pt of testPoints) {
+        if (dist(frank.x, frank.y, pt.x, pt.y) <= range) {
+          let angleToPt = atan2(pt.y - frank.y, pt.x - frank.x);
+          let diff = angleToPt - frank.windupAngle;
+          while (diff > PI) diff -= TWO_PI;
+          while (diff < -PI) diff += TWO_PI;
 
-        if (abs(diff) <= spreadAngle / 2) {
-          walls.splice(i, 1); 
+          if (abs(diff) <= spreadAngle / 2) {
+            hitWall = true;
+            break; // Break the inner loop, we found a hit!
+          }
         }
+      }
+
+      if (hitWall) {
+        walls.splice(i, 1); 
       }
     }
   }
@@ -889,6 +938,23 @@ function fireEdgarPunch(edgar) {
     maxRange: BRAWLER_STATS["Edgar"].range, brawlerName: "Edgar",
     vx: cos(edgar.edgarAngle) * 12, vy: sin(edgar.edgarAngle) * 12,
     damage: edgar.damage, owner: edgar.id, ignoresWalls: false, isSuper: false, active: true,
+  });
+}
+
+function fireColtBullet(colt) {
+  let totalShots = colt.coltIsSuper ? BRAWLER_STATS["Colt"].superProjectiles : BRAWLER_STATS["Colt"].projectiles;
+  let shotIndex = totalShots - colt.coltShots;
+  
+  let sideOffset = (shotIndex % 2 === 0) ? -12 : 12; // Alternate left and right pistol spacing
+  let perpAngle = colt.coltAngle + PI / 2;
+  let spawnX = colt.x + cos(perpAngle) * sideOffset;
+  let spawnY = colt.y + sin(perpAngle) * sideOffset;
+  
+  projectiles.push({
+    x: spawnX, y: spawnY, startX: spawnX, startY: spawnY,
+    maxRange: BRAWLER_STATS["Colt"].range, brawlerName: "Colt",
+    vx: cos(colt.coltAngle) * 14, vy: sin(colt.coltAngle) * 14, // Slightly slower constant speed
+    damage: colt.damage, owner: colt.id, ignoresWalls: colt.coltIsSuper, isSuper: colt.coltIsSuper, active: true,
   });
 }
 
@@ -1061,6 +1127,7 @@ function drawGame() {
       p.attackWindup = 0; 
       p.leonShots = 0; 
       p.edgarShots = 0;
+      p.coltShots = 0;
     } else {
       if (p.attackWindup > 0) {
         p.attackWindup--;
@@ -1082,6 +1149,15 @@ function drawGame() {
           p.edgarTimer = 4; 
         } else {
           p.edgarTimer--;
+        }
+      }
+      if (p.coltShots > 0) {
+        if (p.coltTimer <= 0) {
+          fireColtBullet(p);
+          p.coltShots--;
+          p.coltTimer = 3; // Ultra-fast burst delay between shots
+        } else {
+          p.coltTimer--;
         }
       }
     }
