@@ -384,12 +384,11 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
       if (shooter.ammo <= 0) return; 
       shooter.ammo--; 
     }
-    
     let bAngle = overrideAngle !== null ? overrideAngle : random(TWO_PI);
-    // NEW: Auto-aim when holding the ball targets the enemy goal!
+    
     if (overrideAngle === null) {
-      let enemyGoalX = shooter.team === "blue" ? width : 0;
-      bAngle = atan2(height / 2 - shooter.y, enemyGoalX - shooter.x);
+      let targetGoalX = shooter.team === "blue" ? width : 0;
+      bAngle = atan2(height / 2 - shooter.y, targetGoalX - shooter.x);
     }
     
     ball.owner = null;
@@ -967,6 +966,11 @@ function drawGame() {
       fill(0, 0, 0, 50); ellipse(p.x, p.y + p.r / 2, p.r, p.r / 2); fill(p.team === "blue" ? "#3498db" : "#e74c3c"); circle(p.x, p.y, p.r);
       let aimAngle = 0; let target = getNearestEnemy(p).target; if (target) aimAngle = atan2(target.y - p.y, target.x - p.x);
       
+      if (mode === "BRAWL BALL" && ball && ball.owner === p.id) {
+        let targetGoalX = p.team === "blue" ? width : 0;
+        aimAngle = atan2(height / 2 - p.y, targetGoalX - p.x);
+      }
+
       if (useControllers && !p.isBot) {
         let gpIndex = p.id === "blue1" ? 0 : (p.id === "red1" ? 1 : -1);
         if (gpIndex >= 0 && gamepads[gpIndex]) {
@@ -1038,9 +1042,8 @@ function drawGame() {
     else if (!redAlive) { blueWins++; roundOver = true; }
   } else if (mode === "BRAWL BALL") {
     if (ball) {
-      // Expanded hitboxes so walking the ball into the net triggers a goal (players can't reach x < 10 due to map borders)
-      if (ball.x <= 35 && ball.y > height/2 - 100 && ball.y < height/2 + 100) { redWins++; roundOver = true; }
-      else if (ball.x >= width - 35 && ball.y > height/2 - 100 && ball.y < height/2 + 100) { blueWins++; roundOver = true; }
+      if (ball.x < 20 && ball.y > height/2 - 100 && ball.y < height/2 + 100) { redWins++; roundOver = true; }
+      else if (ball.x > width - 20 && ball.y > height/2 - 100 && ball.y < height/2 + 100) { blueWins++; roundOver = true; }
     }
   } else if (mode === "HEIST") {
     let bSafe = safes.find(s => s.team === "blue");
