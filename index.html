@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BrawlStars 2.0</title>
     
-    <link rel="icon" type="image/png" href="./Logo.png">
+    <link rel="icon" type="image/png" href="BrawlTard.png">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -177,7 +177,7 @@ function preload() {
       loadFont('./LilitaOne.ttf', (f) => { customFont = f; });
     } catch (e) {}
   }
-  loadImage('./Logo.png', (img) => { brawlerImages["Logo"] = img; }, (err) => {});
+  loadImage('BrawlTard.png', (img) => { brawlerImages["Logo"] = img; }, (err) => {});
 }
 
 // NEW: Asynchronously load all heavy character assets AFTER the user clicks start!
@@ -270,7 +270,8 @@ function createPlayerObject(id, team, brawlerName, isBot) {
     x: 0, y: 0, r: 35, speed: isBot ? 3.5 : 4, cooldown: 0, maxCooldown: 30, 
     hits: 0, ammo: 3, reloadTimer: 0, lastCombatTime: 0, dashTicks: 0, dashVx: 0, dashVy: 0, hasDamagedInDash: false,
     hp: stats.hp, maxHp: stats.hp, damage: stats.damage, superDesc: stats.superDesc,
-    stunTicks: 0, attackWindup: 0, leonShots: 0, edgarShots: 0, coltShots: 0, jumpTicks: 0, isInvisible: false, invisTicks: 0, hotdogTicks: 0
+    stunTicks: 0, attackWindup: 0, leonShots: 0, edgarShots: 0, coltShots: 0, jumpTicks: 0, isInvisible: false, invisTicks: 0, hotdogTicks: 0,
+    aimingSuper: false, prevRB: false
   };
 }
 
@@ -315,6 +316,7 @@ function startNextRound() {
     p.hp = p.maxHp; p.cooldown = 0; p.ammo = 3; p.reloadTimer = 0; p.stunTicks = 0; p.attackWindup = 0;
     p.leonShots = 0; p.edgarShots = 0; p.coltShots = 0; p.lastCombatTime = frameCount; 
     p.dashTicks = 0; p.jumpTicks = 0; p.isInvisible = false; p.invisTicks = 0; p.hotdogTicks = 0;
+    p.aimingSuper = false; p.prevRB = false;
   }
 }
 
@@ -577,7 +579,7 @@ function drawSplash() {
     push(); fill(255); textAlign(CENTER, CENTER); textSize(60);
     let scalePulse = 1.0 + sin(frameCount * 0.05) * 0.05;
     translate(width / 2, height / 2 - 50); scale(scalePulse);
-    text("BRAWL STARS 2.0", 0, 0);
+    text("BrawlTards", 0, 0);
     pop();
   }
 
@@ -608,7 +610,7 @@ function drawLoading() {
 
 function drawLobby() {
   drawBackground(); 
-  if (showLobbyTitle) { push(); fill("#ff2e43"); stroke("#000000"); strokeWeight(8); textAlign(CENTER, TOP); textSize(80); text("BRAWL STARS 2.0", width / 2, 40); pop(); }
+  if (showLobbyTitle) { push(); fill("#ff2e43"); stroke("#000000"); strokeWeight(8); textAlign(CENTER, TOP); textSize(80); text("BrawlTards", width / 2, 40); pop(); }
   for (let player of players) { player.update(); player.draw(); }
   for (let btn of buttons) { btn.update(mouseX, mouseY); btn.draw(); }
   if (controllerSwitch) { controllerSwitch.update(mouseX, mouseY); controllerSwitch.draw(); }
@@ -717,8 +719,8 @@ function drawGame() {
         if (p.id === "blue1") {
           if (useControllers) {
             if (gamepads[0]) {
-              if (Math.abs(gamepads[0].axes[3]) > 0.2) nextY += gamepads[0].axes[3] * p.speed;
-              if (Math.abs(gamepads[0].axes[2]) > 0.2) nextX += gamepads[0].axes[2] * p.speed;
+              if (Math.abs(gamepads[0].axes[1]) > 0.2) nextY += gamepads[0].axes[1] * p.speed;
+              if (Math.abs(gamepads[0].axes[0]) > 0.2) nextX += gamepads[0].axes[0] * p.speed;
             }
           } else {
             if (keyIsDown(87)) nextY -= p.speed; if (keyIsDown(83)) nextY += p.speed; if (keyIsDown(65)) nextX -= p.speed; if (keyIsDown(68)) nextX += p.speed; 
@@ -726,8 +728,8 @@ function drawGame() {
         } else if (p.id === "red1") {
           if (useControllers) {
             if (gamepads[1]) {
-              if (Math.abs(gamepads[1].axes[3]) > 0.2) nextY += gamepads[1].axes[3] * p.speed;
-              if (Math.abs(gamepads[1].axes[2]) > 0.2) nextX += gamepads[1].axes[2] * p.speed;
+              if (Math.abs(gamepads[1].axes[1]) > 0.2) nextY += gamepads[1].axes[1] * p.speed;
+              if (Math.abs(gamepads[1].axes[0]) > 0.2) nextX += gamepads[1].axes[0] * p.speed;
             }
           } else {
             if (keyIsDown(UP_ARROW)) nextY -= p.speed; if (keyIsDown(DOWN_ARROW)) nextY += p.speed; if (keyIsDown(LEFT_ARROW)) nextX -= p.speed; if (keyIsDown(RIGHT_ARROW)) nextX += p.speed;
@@ -745,10 +747,15 @@ function drawGame() {
     let target = getNearestEnemy(p1).target;
     if (useControllers) {
       if (gamepads[0]) {
-        let isAiming = Math.abs(gamepads[0].axes[0]) > 0.2 || Math.abs(gamepads[0].axes[1]) > 0.2;
-        let aimAngle = isAiming ? atan2(gamepads[0].axes[1], gamepads[0].axes[0]) : null;
-        if (gamepads[0].buttons[7].pressed || gamepads[0].buttons[7].value > 0.5) shootProjectile(p1, target, false, aimAngle);
-        if (gamepads[0].buttons[6].pressed || gamepads[0].buttons[6].value > 0.5) shootProjectile(p1, target, true, aimAngle);
+        let gp = gamepads[0];
+        let rbPressed = gp.buttons[5].pressed;
+        if (rbPressed && !p1.prevRB) p1.aimingSuper = !p1.aimingSuper;
+        p1.prevRB = rbPressed;
+
+        let isAiming = Math.abs(gp.axes[2]) > 0.2 || Math.abs(gp.axes[3]) > 0.2;
+        let aimAngle = isAiming ? atan2(gp.axes[3], gp.axes[2]) : null;
+        if (gp.buttons[7].pressed || gp.buttons[7].value > 0.5) shootProjectile(p1, target, false, p1.aimingSuper ? null : aimAngle);
+        if (gp.buttons[6].pressed || gp.buttons[6].value > 0.5) shootProjectile(p1, target, true, p1.aimingSuper ? aimAngle : null);
       }
     } else {
       if (keyIsDown(69)) shootProjectile(p1, target, false); if (keyIsDown(81)) shootProjectile(p1, target, true);  
@@ -760,10 +767,15 @@ function drawGame() {
     let target = getNearestEnemy(p2).target;
     if (useControllers) {
       if (gamepads[1]) {
-        let isAiming = Math.abs(gamepads[1].axes[0]) > 0.2 || Math.abs(gamepads[1].axes[1]) > 0.2;
-        let aimAngle = isAiming ? atan2(gamepads[1].axes[1], gamepads[1].axes[0]) : null;
-        if (gamepads[1].buttons[7].pressed || gamepads[1].buttons[7].value > 0.5) shootProjectile(p2, target, false, aimAngle);
-        if (gamepads[1].buttons[6].pressed || gamepads[1].buttons[6].value > 0.5) shootProjectile(p2, target, true, aimAngle);
+        let gp = gamepads[1];
+        let rbPressed = gp.buttons[5].pressed;
+        if (rbPressed && !p2.prevRB) p2.aimingSuper = !p2.aimingSuper;
+        p2.prevRB = rbPressed;
+
+        let isAiming = Math.abs(gp.axes[2]) > 0.2 || Math.abs(gp.axes[3]) > 0.2;
+        let aimAngle = isAiming ? atan2(gp.axes[3], gp.axes[2]) : null;
+        if (gp.buttons[7].pressed || gp.buttons[7].value > 0.5) shootProjectile(p2, target, false, p2.aimingSuper ? null : aimAngle);
+        if (gp.buttons[6].pressed || gp.buttons[6].value > 0.5) shootProjectile(p2, target, true, p2.aimingSuper ? aimAngle : null);
       }
     } else {
       if (keyIsDown(16)) shootProjectile(p2, target, false); if (keyIsDown(191)) shootProjectile(p2, target, true); 
@@ -907,8 +919,8 @@ function drawGame() {
         let gpIndex = p.id === "blue1" ? 0 : (p.id === "red1" ? 1 : -1);
         if (gpIndex >= 0 && gamepads[gpIndex]) {
           let gp = gamepads[gpIndex];
-          if (Math.abs(gp.axes[0]) > 0.2 || Math.abs(gp.axes[1]) > 0.2) {
-            aimAngle = atan2(gp.axes[1], gp.axes[0]);
+          if (Math.abs(gp.axes[2]) > 0.2 || Math.abs(gp.axes[3]) > 0.2) {
+            aimAngle = atan2(gp.axes[3], gp.axes[2]);
           }
         }
       }
