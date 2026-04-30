@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BrawlStars 2.0</title>
     
-    <link rel="icon" type="image/png" href="BrawlTard.png">
+    <link rel="icon" type="image/png" href="./Logo.png">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,26 +36,17 @@ let controllerSwitch;
 let cpuSwitch;
 
 let brawlerList = [
-  "Shelly",
-  "Colt",
-  "Leon",
-  "Piper",
-  "Mortis",
-  "Dynamike",
-  "Frank",
-  "Edgar",
-  "Doug",
-  "Barley",
+  "Shelly", "Colt", "Leon", "Piper", "Mortis", 
+  "Dynamike", "Frank", "Edgar", "Doug", "Barley",
 ];
 
 let leftMenuOpen = false; 
 let rightMenuOpen = false; 
-
 let brawlerImages = {}; 
 let bgGraphics; 
 
-let gameState = "SPLASH"; // START IN SPLASH MODE
-let loadedAssets = 0; // Tracks downloaded images
+let gameState = "SPLASH"; 
+let loadedAssets = 0; 
 let totalAssets = 0; 
 let splashStartBtn;
 
@@ -70,6 +61,12 @@ let redTotalDamage = 0;
 let useControllers = false; 
 let cpuMode = false;
 let showLobbyTitle = true;
+
+// NEW: Game Modes Support
+let gameModes = ["KNOCKOUT", "BRAWL BALL", "HEIST"];
+let currentModeIndex = 0;
+let ball = null;
+let safes = [];
 
 let activePlayers = [];
 let roundStartFrame = 0;
@@ -173,53 +170,32 @@ class Player {
 function preload() {
   let isPreview = window.location.protocol === 'data:' || window.location.protocol === 'blob:' || window.location.hostname.includes("usercontent.goog");
   if (!isPreview) {
-    try {
-      loadFont('./LilitaOne.ttf', (f) => { customFont = f; });
-    } catch (e) {}
+    try { loadFont('./LilitaOne.ttf', (f) => { customFont = f; }); } catch (e) {}
   }
-  loadImage('BrawlTard.png', (img) => { brawlerImages["Logo"] = img; }, (err) => {});
+  loadImage('./Logo.png', (img) => { brawlerImages["Logo"] = img; }, (err) => {});
 }
 
-// NEW: Asynchronously load all heavy character assets AFTER the user clicks start!
 function beginLoadingAssets() {
   let toLoad = [
-    {name: "Doug", path: "./Doug.webp"},
-    {name: "Leon", path: "./Leon.webp"},
-    {name: "Shelly", path: "./Shelly.webp"},
-    {name: "Frank", path: "./Frank.webp"},
-    {name: "Edgar", path: "./edgar.gif"},
-    {name: "Barley", path: "./Barley.webp"},
-    {name: "Dynamike", path: "./Dynamike.webp"},
-    {name: "Colt", path: "./Colt.webp"},
-    {name: "Mortis", path: "./Mortis.png"},
-    {name: "Piper", path: "./Piper.webp"},
-    {name: "ShellyWeapon", path: "./shotgun.png"}
+    {name: "Doug", path: "./Doug.webp"}, {name: "Leon", path: "./Leon.webp"}, {name: "Shelly", path: "./Shelly.webp"},
+    {name: "Frank", path: "./Frank.webp"}, {name: "Edgar", path: "./edgar.gif"}, {name: "Barley", path: "./Barley.webp"},
+    {name: "Dynamike", path: "./Dynamike.webp"}, {name: "Colt", path: "./Colt.webp"}, {name: "Mortis", path: "./Mortis.png"},
+    {name: "Piper", path: "./Piper.webp"}, {name: "ShellyWeapon", path: "./shotgun.png"}
   ];
-  totalAssets = toLoad.length;
-  loadedAssets = 0;
-  
+  totalAssets = toLoad.length; loadedAssets = 0;
   for(let item of toLoad) {
-    loadImage(item.path, (img) => {
-      brawlerImages[item.name] = img;
-      loadedAssets++;
-    }, (err) => {
-      console.warn("Failed to load local file: " + item.path);
-      loadedAssets++; // Fail gracefully to prevent infinite loading screens
-    });
+    loadImage(item.path, (img) => { brawlerImages[item.name] = img; loadedAssets++; }, (err) => { loadedAssets++; });
   }
 }
 
-// OPTIMIZATION: Disables p5.js validation checks which dramatically boosts performance!
 p5.disableFriendlyErrors = true;
 
 function setup() {
-  // OPTIMIZATION: explicitly telling the browser the canvas does not use transparency (alpha: false) significantly speeds up 2D rendering.
   setAttributes('alpha', false);
   createCanvas(windowWidth, windowHeight, P2D);
-  frameRate(60); // OPTIMIZATION: Hard limit to 60fps so high-refresh monitors don't overload math checks!
+  frameRate(60); 
   
-  if (customFont) textFont(customFont); 
-  else textFont('Lilita One'); 
+  if (customFont) textFont(customFont); else textFont('Lilita One'); 
 
   bgGraphics = createGraphics(windowWidth, windowHeight);
   renderStaticBackground();
@@ -241,7 +217,7 @@ function initScene() {
   buttons.push(new Button("play", "PLAY", playX, playY, playW, playH, "#f1c40f", "#ffffff"));
   controllerSwitch = new ToggleSwitch(playX, playY - playH / 2 - 50, 80, 36, "Controller Mode", useControllers, (val) => useControllers = val);
 
-  buttons.push(new Button("mode_select", "MODE: KNOCKOUT", 150, height - 50, 220, 50, "#e67e22", "#ffffff"));
+  buttons.push(new Button("mode_select", "MODE: " + gameModes[currentModeIndex], 150, height - 50, 220, 50, "#e67e22", "#ffffff"));
   cpuSwitch = new ToggleSwitch(150, height - 130, 80, 36, "CPU MATCH (3v3)", cpuMode, (val) => cpuMode = val);
 
   let sideBtnW = min(width * 0.15, 180); let sideBtnH = sideBtnW * 0.4;
@@ -301,17 +277,22 @@ function initGame() {
 function startNextRound() {
   projectiles = []; smashEffects = []; bombs = []; puddles = []; dougSplashes = [];
   roundStartFrame = frameCount;
+  ball = null; safes = [];
+
+  let mode = gameModes[currentModeIndex];
+  if (mode === "BRAWL BALL") {
+    ball = {x: width / 2, y: height / 2, vx: 0, vy: 0, owner: null};
+  } else if (mode === "HEIST") {
+    safes.push({id: "blueSafe", team: "blue", hp: 58000, maxHp: 58000, x: width * 0.08, y: height / 2, r: 80});
+    safes.push({id: "redSafe", team: "red", hp: 58000, maxHp: 58000, x: width * 0.92, y: height / 2, r: 80});
+  }
 
   let bCount = 0; let rCount = 0;
   for (let p of activePlayers) {
     if (p.team === "blue") {
-      p.x = width * 0.1;
-      p.y = bCount === 0 ? height * 0.5 : (bCount === 1 ? height * 0.25 : height * 0.75);
-      bCount++;
+      p.x = width * 0.1; p.y = bCount === 0 ? height * 0.5 : (bCount === 1 ? height * 0.25 : height * 0.75); bCount++;
     } else {
-      p.x = width * 0.9;
-      p.y = rCount === 0 ? height * 0.5 : (rCount === 1 ? height * 0.25 : height * 0.75);
-      rCount++;
+      p.x = width * 0.9; p.y = rCount === 0 ? height * 0.5 : (rCount === 1 ? height * 0.25 : height * 0.75); rCount++;
     }
     p.hp = p.maxHp; p.cooldown = 0; p.ammo = 3; p.reloadTimer = 0; p.stunTicks = 0; p.attackWindup = 0;
     p.leonShots = 0; p.edgarShots = 0; p.coltShots = 0; p.lastCombatTime = frameCount; 
@@ -320,7 +301,6 @@ function startNextRound() {
   }
 }
 
-// OPTIMIZATION: Core physics functions rewritten to use squared distance to avoid heavy square-root math causing lag!
 function checkWallCollision(px, py, radius) {
   let rSq = radius * radius;
   for (let w of walls) {
@@ -342,8 +322,7 @@ function addDamage(ownerId, amount) {
 }
 
 function checkLineOfSight(x1, y1, x2, y2) {
-  let d = dist(x1, y1, x2, y2);
-  let steps = Math.max(1, d / 25); 
+  let d = dist(x1, y1, x2, y2); let steps = Math.max(1, d / 25); 
   for (let i = 0; i <= steps; i++) {
     if (checkProjWallCollision(lerp(x1, x2, i / steps), lerp(y1, y2, i / steps))) return false; 
   }
@@ -363,14 +342,21 @@ function resolveWallStuck(player) {
   }
 }
 
-// OPTIMIZATION: Pre-calculate the squared distance to avoid math overhead in bot logic
+// Bot Math - Checks enemies & safes seamlessly!
 function getNearestEnemy(player) {
   let nearest = null; let minDistSq = Infinity;
   for (let e of activePlayers) {
     if (e.team !== player.team && e.hp > 0 && !e.isInvisible) {
-      let dx = player.x - e.x; let dy = player.y - e.y;
-      let dSq = dx * dx + dy * dy;
+      let dx = player.x - e.x; let dy = player.y - e.y; let dSq = dx * dx + dy * dy;
       if (dSq < minDistSq) { minDistSq = dSq; nearest = e; }
+    }
+  }
+  if (gameModes[currentModeIndex] === "HEIST") {
+    for (let s of safes) {
+      if (s.team !== player.team && s.hp > 0) {
+        let dx = player.x - s.x; let dy = player.y - s.y; let dSq = dx * dx + dy * dy;
+        if (dSq < minDistSq) { minDistSq = dSq; nearest = s; }
+      }
     }
   }
   return { target: nearest, distSq: minDistSq };
@@ -378,6 +364,26 @@ function getNearestEnemy(player) {
 
 function shootProjectile(shooter, target, isSuper = false, overrideAngle = null) {
   if (shooter.cooldown > 0 || shooter.stunTicks > 0) return; 
+
+  // NEW: Ball Shooting Logic overrides normal weapons!
+  if (gameModes[currentModeIndex] === "BRAWL BALL" && ball && ball.owner === shooter.id) {
+    if (isSuper) { 
+      if (shooter.hits < BRAWLER_STATS[shooter.brawler].hitsToSuper) return; 
+      shooter.hits = 0; 
+    } else { 
+      if (shooter.ammo <= 0) return; 
+      shooter.ammo--; 
+    }
+    let bAngle = overrideAngle !== null ? overrideAngle : random(TWO_PI);
+    if (target && overrideAngle === null && !target.isInvisible) bAngle = atan2(target.y - shooter.y, target.x - shooter.x);
+    ball.owner = null;
+    ball.vx = cos(bAngle) * (isSuper ? 25 : 15);
+    ball.vy = sin(bAngle) * (isSuper ? 25 : 15);
+    ball.x += ball.vx * 2; ball.y += ball.vy * 2; // Offset it slightly so they don't instapickup
+    shooter.cooldown = shooter.maxCooldown;
+    shooter.lastCombatTime = frameCount;
+    return; 
+  }
 
   if (isSuper) { if (shooter.hits < BRAWLER_STATS[shooter.brawler].hitsToSuper) return; } 
   else { if (shooter.ammo <= 0) return; }
@@ -394,14 +400,11 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     if (isSuper) { shooter.hotdogTicks = 900; } else {
       shooter.hp = Math.min(shooter.hp + 480, shooter.maxHp);
       let aoeRadius = BRAWLER_STATS["Doug"].range / 2;
-      dougSplashes.push({ x: shooter.x, y: shooter.y, radius: aoeRadius*2, life: 15, team: shooter.team });
+      dougSplashes.push({ x: shooter.x, y: shooter.y, radius: aoeRadius*2, life: 15, team: shooter.team, owner: shooter.id, damage: shooter.damage });
       for (let e of activePlayers) {
         if (e.team !== shooter.team && e.hp > 0) {
           let dx = shooter.x - e.x; let dy = shooter.y - e.y; let threshold = aoeRadius + e.r / 2;
-          if (dx*dx + dy*dy < threshold*threshold) {
-            e.hp -= shooter.damage; addDamage(shooter.id, shooter.damage);
-            shooter.hits++; e.lastCombatTime = frameCount;
-          }
+          if (dx*dx + dy*dy < threshold*threshold) { e.hp -= shooter.damage; addDamage(shooter.id, shooter.damage); shooter.hits++; e.lastCombatTime = frameCount; }
         }
       }
     }
@@ -409,18 +412,11 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
   }
 
   if (shooter.brawler === "Barley" && isSuper) {
-    let cx = shooter.x + cos(angle) * BRAWLER_STATS["Barley"].range;
-    let cy = shooter.y + sin(angle) * BRAWLER_STATS["Barley"].range;
-    let spacing = 60;
-    let offsets = [[0, 0], [-spacing, -spacing], [spacing, -spacing], [-spacing, spacing], [spacing, spacing]];
+    let cx = shooter.x + cos(angle) * BRAWLER_STATS["Barley"].range; let cy = shooter.y + sin(angle) * BRAWLER_STATS["Barley"].range;
+    let offsets = [[0, 0], [-60, -60], [60, -60], [-60, 60], [60, 60]];
     for (let off of offsets) {
       let tx = cx + off[0]; let ty = cy + off[1];
-      projectiles.push({
-        x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y,
-        maxRange: dist(shooter.x, shooter.y, tx, ty), brawlerName: shooter.brawler,
-        vx: cos(atan2(ty - shooter.y, tx - shooter.x)) * 12, vy: sin(atan2(ty - shooter.y, tx - shooter.x)) * 12, 
-        damage: shooter.damage, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: true, isSuper: true, active: true,
-      });
+      projectiles.push({ x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y, maxRange: dist(shooter.x, shooter.y, tx, ty), brawlerName: shooter.brawler, vx: cos(atan2(ty - shooter.y, tx - shooter.x)) * 12, vy: sin(atan2(ty - shooter.y, tx - shooter.x)) * 12, damage: shooter.damage, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: true, isSuper: true, active: true, });
     }
     shooter.cooldown = shooter.maxCooldown; return; 
   }
@@ -440,11 +436,8 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
   }
 
   if (shooter.brawler === "Mortis") {
-    if (isSuper) {
-      projectiles.push({ x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y, maxRange: BRAWLER_STATS["Mortis"].range * 2, brawlerName: shooter.brawler, vx: cos(angle) * 15, vy: sin(angle) * 15, damage: 1800, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: true, isSuper: true, active: true, });
-    } else {
-      shooter.dashTicks = 12; shooter.dashVx = cos(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.dashVy = sin(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.hasDamagedInDash = false; 
-    }
+    if (isSuper) { projectiles.push({ x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y, maxRange: BRAWLER_STATS["Mortis"].range * 2, brawlerName: shooter.brawler, vx: cos(angle) * 15, vy: sin(angle) * 15, damage: 1800, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: true, isSuper: true, active: true, }); } 
+    else { shooter.dashTicks = 12; shooter.dashVx = cos(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.dashVy = sin(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.hasDamagedInDash = false; }
     shooter.cooldown = shooter.maxCooldown; return; 
   }
 
@@ -462,20 +455,11 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
 
   for (let i = 0; i < projCount; i++) {
     let finalAngle = angle; let spawnX = shooter.x; let spawnY = shooter.y;
-
     if (projCount > 1) {
-      if (shooter.brawler === "Dynamike" && !isSuper) {
-        spawnX += cos(angle + PI / 2) * (i === 0 ? -12 : 12); spawnY += sin(angle + PI / 2) * (i === 0 ? -12 : 12);
-      } else {
-        let spread = isSuper ? 1.0 : 0.5; finalAngle = (angle - spread / 2) + i * (spread / (projCount - 1)); 
-      }
+      if (shooter.brawler === "Dynamike" && !isSuper) { spawnX += cos(angle + PI / 2) * (i === 0 ? -12 : 12); spawnY += sin(angle + PI / 2) * (i === 0 ? -12 : 12); } 
+      else { let spread = isSuper ? 1.0 : 0.5; finalAngle = (angle - spread / 2) + i * (spread / (projCount - 1)); }
     }
-
-    projectiles.push({
-      x: spawnX, y: spawnY, startX: spawnX, startY: spawnY,
-      maxRange: BRAWLER_STATS[shooter.brawler].range, brawlerName: shooter.brawler,
-      vx: cos(finalAngle) * 12, vy: sin(finalAngle) * 12, damage: shooter.damage, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: ignoresWalls, isSuper: isSuper, active: true, 
-    });
+    projectiles.push({ x: spawnX, y: spawnY, startX: spawnX, startY: spawnY, maxRange: BRAWLER_STATS[shooter.brawler].range, brawlerName: shooter.brawler, vx: cos(finalAngle) * 12, vy: sin(finalAngle) * 12, damage: shooter.damage, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: ignoresWalls, isSuper: isSuper, active: true, });
   }
   shooter.cooldown = shooter.maxCooldown;
 }
@@ -489,14 +473,22 @@ function executeFrankSmash(frank) {
       if (dist(frank.x, frank.y, enemy.x, enemy.y) - (enemy.r / 2) <= range) {
         let diff = atan2(enemy.y - frank.y, enemy.x - frank.x) - frank.windupAngle;
         while (diff > PI) diff -= TWO_PI; while (diff < -PI) diff += TWO_PI;
-
         if (abs(diff) <= (PI / 3) / 2) {
           if (frank.windupIsSuper || checkLineOfSight(frank.x, frank.y, enemy.x, enemy.y)) {
-            enemy.hp -= frank.damage; addDamage(frank.id, frank.damage);
-            frank.hits++; frank.lastCombatTime = frameCount; enemy.lastCombatTime = frameCount;
+            enemy.hp -= frank.damage; addDamage(frank.id, frank.damage); frank.hits++; frank.lastCombatTime = frameCount; enemy.lastCombatTime = frameCount;
             if (frank.windupIsSuper) enemy.stunTicks = floor(2.48 * 60); 
           }
         }
+      }
+    }
+  }
+
+  for (let s of safes) {
+    if (dist(frank.x, frank.y, s.x, s.y) - (s.r / 2) <= range) {
+      let diff = atan2(s.y - frank.y, s.x - frank.x) - frank.windupAngle;
+      while (diff > PI) diff -= TWO_PI; while (diff < -PI) diff += TWO_PI;
+      if (abs(diff) <= (PI / 3) / 2) {
+        if (frank.windupIsSuper || checkLineOfSight(frank.x, frank.y, s.x, s.y)) { s.hp -= frank.damage; addDamage(frank.id, frank.damage); }
       }
     }
   }
@@ -561,56 +553,29 @@ function draw() {
 }
 
 function drawSplash() {
-  background("#c39bd3"); // Light purple background
-  
+  background("#c39bd3"); 
   let logo = brawlerImages["Logo"];
   if (logo && logo.width > 0) {
-    let scalePulse = 1.0 + sin(frameCount * 0.05) * 0.05; // Gentle shrink and grow
-    push();
-    imageMode(CENTER);
-    translate(width / 2, height / 2 - 50);
-    scale(scalePulse);
-    let maxW = min(width * 0.6, 500); // Scale nicely to the screen
-    let aspect = logo.height / logo.width;
-    image(logo, 0, 0, maxW, maxW * aspect);
-    pop();
+    let scalePulse = 1.0 + sin(frameCount * 0.05) * 0.05; 
+    push(); imageMode(CENTER); translate(width / 2, height / 2 - 50); scale(scalePulse); let maxW = min(width * 0.6, 500); image(logo, 0, 0, maxW, maxW * (logo.height / logo.width)); pop();
   } else {
-    // Fallback text if Logo.png is missing
-    push(); fill(255); textAlign(CENTER, CENTER); textSize(60);
-    let scalePulse = 1.0 + sin(frameCount * 0.05) * 0.05;
-    translate(width / 2, height / 2 - 50); scale(scalePulse);
-    text("BrawlTards", 0, 0);
-    pop();
+    push(); fill(255); textAlign(CENTER, CENTER); textSize(60); let scalePulse = 1.0 + sin(frameCount * 0.05) * 0.05; translate(width / 2, height / 2 - 50); scale(scalePulse); text("BRAWL STARS 2.0", 0, 0); pop();
   }
 
-  if (!splashStartBtn) {
-    splashStartBtn = new Button("splash_start", "START", width / 2, height / 2 + 150, 250, 60, "#f1c40f", "#ffffff");
-  }
-  splashStartBtn.update(mouseX, mouseY);
-  splashStartBtn.draw();
+  if (!splashStartBtn) splashStartBtn = new Button("splash_start", "START", width / 2, height / 2 + 150, 250, 60, "#f1c40f", "#ffffff");
+  splashStartBtn.update(mouseX, mouseY); splashStartBtn.draw();
 }
 
 function drawLoading() {
-  background(0);
-  fill(255); textAlign(CENTER, CENTER); textSize(40);
-  text("LOADING ASSETS...", width / 2, height / 2 - 50);
-  
-  let w = 300; let h = 30;
-  noFill(); stroke(255); strokeWeight(4);
-  rect(width / 2 - w / 2, height / 2, w, h, 10);
-  
-  fill("#2ecc71"); noStroke();
-  let progress = totalAssets > 0 ? (loadedAssets / totalAssets) * w : 0;
-  rect(width / 2 - w / 2, height / 2, progress, h, 10);
-  
-  if (loadedAssets >= totalAssets && totalAssets > 0) {
-    gameState = "LOBBY"; // Instantly jump to lobby when done loading!
-  }
+  background(0); fill(255); textAlign(CENTER, CENTER); textSize(40); text("LOADING ASSETS...", width / 2, height / 2 - 50);
+  let w = 300; let h = 30; noFill(); stroke(255); strokeWeight(4); rect(width / 2 - w / 2, height / 2, w, h, 10);
+  fill("#2ecc71"); noStroke(); let progress = totalAssets > 0 ? (loadedAssets / totalAssets) * w : 0; rect(width / 2 - w / 2, height / 2, progress, h, 10);
+  if (loadedAssets >= totalAssets && totalAssets > 0) gameState = "LOBBY"; 
 }
 
 function drawLobby() {
   drawBackground(); 
-  if (showLobbyTitle) { push(); fill("#ff2e43"); stroke("#000000"); strokeWeight(8); textAlign(CENTER, TOP); textSize(80); text("BrawlTards", width / 2, 40); pop(); }
+  if (showLobbyTitle) { push(); fill("#ff2e43"); stroke("#000000"); strokeWeight(8); textAlign(CENTER, TOP); textSize(80); text("BRAWL STARS 2.0", width / 2, 40); pop(); }
   for (let player of players) { player.update(); player.draw(); }
   for (let btn of buttons) { btn.update(mouseX, mouseY); btn.draw(); }
   if (controllerSwitch) { controllerSwitch.update(mouseX, mouseY); controllerSwitch.draw(); }
@@ -622,13 +587,35 @@ function drawLobby() {
 }
 
 function drawGame() {
-  background("#e6cc98"); 
+  let mode = gameModes[currentModeIndex];
+  if (mode === "KNOCKOUT") background("#e6cc98"); 
+  else if (mode === "BRAWL BALL") background("#27ae60");
+  else if (mode === "HEIST") background("#7f8c8d");
 
-  // OPTIMIZATION: Only grab the gamepad state array if Controller Mode is actively toggled ON!
-  let gamepads = [];
-  if (useControllers && navigator.getGamepads) {
-    gamepads = navigator.getGamepads();
+  // Draw Goals
+  if (mode === "BRAWL BALL") {
+    fill(255, 255, 255, 60); noStroke(); rectMode(CENTER);
+    rect(10, height/2, 20, 200); rect(width - 10, height/2, 20, 200);
   }
+
+  // Draw Safes
+  if (mode === "HEIST") {
+    for (let s of safes) {
+      push(); translate(s.x, s.y); fill("#8e44ad"); stroke("#2c3e50"); strokeWeight(4); rectMode(CENTER); rect(0, 0, s.r, s.r, 10);
+      fill("#e74c3c"); noStroke(); triangle(0, -20, -20, 0, 0, 20); triangle(0, 20, 20, 0, 0, -20);
+      fill(0); rect(0, -s.r/2 - 15, 60, 10); fill("#2ecc71"); rectMode(CORNER); rect(-30, -s.r/2 - 20, 60 * max(0, s.hp / s.maxHp), 10);
+      fill(255); textSize(10); textAlign(CENTER, CENTER); text(Math.floor(s.hp), 0, -s.r/2 - 15); pop();
+    }
+  }
+
+  // Draw loose ball behind players
+  if (mode === "BRAWL BALL" && ball && !ball.owner) {
+    push(); fill("#F5F5DC"); stroke("#8B4513"); strokeWeight(2); circle(ball.x, ball.y, 20);
+    noFill(); arc(ball.x - 5, ball.y, 10, 20, -PI/2, PI/2); arc(ball.x + 5, ball.y, 10, 20, PI/2, -PI/2); pop();
+  }
+
+  let gamepads = [];
+  if (useControllers && navigator.getGamepads) gamepads = navigator.getGamepads();
 
   for (let p of activePlayers) {
     if (p.hp <= 0) continue; 
@@ -659,7 +646,6 @@ function drawGame() {
     } else if (p.dashTicks > 0) {
       p.dashTicks--; nextX = p.x + p.dashVx; nextY = p.y + p.dashVy;
       if (!checkWallCollision(nextX, p.y, pRad)) p.x = nextX; if (!checkWallCollision(p.x, nextY, pRad)) p.y = nextY;
-
       if (!p.hasDamagedInDash) {
         for (let e of activePlayers) {
           if (e.team !== p.team && e.hp > 0) {
@@ -673,64 +659,92 @@ function drawGame() {
       if (p.isBot) {
         if (frameCount - roundStartFrame > 60) {
           let enemyData = getNearestEnemy(p);
-          if (enemyData.target) {
-            let target = enemyData.target;
-            let d = Math.sqrt(enemyData.distSq); // Square Root only calculated ONCE per bot!
-            let angleToEnemy = atan2(target.y - p.y, target.x - p.x); let range = BRAWLER_STATS[p.brawler].range;
-            
-            let optimalMinDist = range * 0.4; let optimalMaxDist = range * 0.8; let attackDist = range * 0.9;
-            if (p.brawler === "Piper") { optimalMinDist = range * 0.6; optimalMaxDist = range * 0.95; attackDist = range; } 
-            else if (p.brawler === "Edgar") { optimalMinDist = 10; optimalMaxDist = range * 0.9; attackDist = range * 1.1; } 
-            else if (p.brawler === "Shelly") { optimalMinDist = range * 0.1; optimalMaxDist = range * 0.6; attackDist = range * 0.8; }
+          let target = enemyData.target;
+          let targetX = target ? target.x : width / 2;
+          let targetY = target ? target.y : height / 2;
+          let d = target ? Math.sqrt(enemyData.distSq) : Infinity;
+          let range = BRAWLER_STATS[p.brawler].range;
+          let optimalMinDist = range * 0.4; let optimalMaxDist = range * 0.8; let attackDist = range * 0.9;
 
-            let moveAngle = angleToEnemy; let isMoving = false;
+          // Advanced Bot Objective AI overrides
+          if (mode === "BRAWL BALL" && ball) {
+            if (ball.owner === p.id) {
+              targetX = p.team === "blue" ? width : 0; targetY = height / 2;
+              d = dist(p.x, p.y, targetX, targetY);
+              optimalMinDist = 0; optimalMaxDist = Infinity; attackDist = 0; // Rush goal
+              if (d < 300 || (target && dist(p.x, p.y, target.x, target.y) < 150)) {
+                if (p.ammo > 0) shootProjectile(p, null, p.hits >= BRAWLER_STATS[p.brawler].hitsToSuper, atan2(targetY - p.y, targetX - p.x));
+              }
+            } else if (!ball.owner) {
+              targetX = ball.x; targetY = ball.y; d = dist(p.x, p.y, targetX, targetY);
+              optimalMinDist = 0; optimalMaxDist = Infinity; attackDist = 0; // Rush loose ball
+            } else {
+              let ownerPl = activePlayers.find(pl => pl.id === ball.owner);
+              if (ownerPl && ownerPl.team !== p.team) { targetX = ownerPl.x; targetY = ownerPl.y; d = dist(p.x, p.y, targetX, targetY); }
+            }
+          } else if (mode === "HEIST") {
+            let enemySafe = safes.find(s => s.team !== p.team);
+            if (enemySafe) {
+              let safeDist = dist(p.x, p.y, enemySafe.x, enemySafe.y);
+              if (safeDist < d + 200 || !target) { targetX = enemySafe.x; targetY = enemySafe.y; d = safeDist; target = enemySafe; }
+            }
+          }
+
+          let angleToEnemy = atan2(targetY - p.y, targetX - p.x); 
+          
+          if (p.brawler === "Piper") { optimalMinDist = range * 0.6; optimalMaxDist = range * 0.95; attackDist = range; } 
+          else if (p.brawler === "Edgar") { optimalMinDist = 10; optimalMaxDist = range * 0.8; attackDist = range * 0.9; } 
+          else if (p.brawler === "Shelly") { optimalMinDist = range * 0.1; optimalMaxDist = range * 0.6; attackDist = range * 0.8; }
+          else if (p.brawler === "Doug") { optimalMinDist = 10; optimalMaxDist = (range / 2) * 0.8; attackDist = (range / 2) * 0.9; }
+          else if (p.brawler === "Mortis" || p.brawler === "Frank") { optimalMinDist = 10; optimalMaxDist = range * 0.8; attackDist = range * 0.9; }
+
+          let moveAngle = angleToEnemy; let isMoving = false;
+          if (mode !== "BRAWL BALL" || (ball && ball.owner !== p.id && ball.owner)) {
             if (p.hp < p.maxHp * 0.35 || d < optimalMinDist) { moveAngle = angleToEnemy + PI; isMoving = true; } 
             else if (d > optimalMaxDist) { moveAngle = angleToEnemy; isMoving = true; }
+            else { moveAngle = angleToEnemy + (p.id.charCodeAt(p.id.length - 1) % 2 === 0 ? PI/2 : -PI/2); isMoving = true; }
+          } else {
+            isMoving = true; // Always move if fetching loose ball or rushing goal
+          }
 
-            if (isMoving) {
-              moveAngle += sin(frameCount * 0.05 + p.id.length) * 0.5;
-              if (checkWallCollision(p.x + cos(moveAngle) * (p.speed * 4), p.y + sin(moveAngle) * (p.speed * 4), pRad)) {
-                let leftAngle = moveAngle - PI / 2.5; let rightAngle = moveAngle + PI / 2.5;
-                if (!checkWallCollision(p.x + cos(leftAngle) * (p.speed * 3), p.y + sin(leftAngle) * (p.speed * 3), pRad)) moveAngle = leftAngle;
-                else if (!checkWallCollision(p.x + cos(rightAngle) * (p.speed * 3), p.y + sin(rightAngle) * (p.speed * 3), pRad)) moveAngle = rightAngle;
-              }
-              nextX += cos(moveAngle) * p.speed; nextY += sin(moveAngle) * p.speed;
+          if (isMoving) {
+            moveAngle += sin(frameCount * 0.05 + p.id.length) * 0.5;
+            let isBlocked = (tx, ty) => checkWallCollision(tx, ty, pRad) || tx < pRad*2 || tx > width - pRad*2 || ty < pRad*2 || ty > height - pRad*2;
+            if (isBlocked(p.x + cos(moveAngle) * (p.speed * 4), p.y + sin(moveAngle) * (p.speed * 4))) {
+              let leftAngle = moveAngle - PI / 2.5; let rightAngle = moveAngle + PI / 2.5;
+              if (!isBlocked(p.x + cos(leftAngle) * (p.speed * 3), p.y + sin(leftAngle) * (p.speed * 3))) moveAngle = leftAngle;
+              else if (!isBlocked(p.x + cos(rightAngle) * (p.speed * 3), p.y + sin(rightAngle) * (p.speed * 3))) moveAngle = rightAngle;
             }
+            nextX += cos(moveAngle) * p.speed; nextY += sin(moveAngle) * p.speed;
+          }
 
-            if (d <= attackDist && p.cooldown <= 0 && p.ammo > 0) {
-              let fireChance = 0.03; 
-              if (p.brawler === "Edgar" && d <= BRAWLER_STATS["Edgar"].range) fireChance = 0.8; 
-              else if (p.brawler === "Shelly" && d <= BRAWLER_STATS["Shelly"].range * 0.6) fireChance = 0.4;
-              else if (p.brawler === "Piper" && d > range * 0.5) fireChance = 0.2; 
-              else if (p.brawler === "Frank") fireChance = 0.5;
-              
-              let useSuper = p.hits >= BRAWLER_STATS[p.brawler].hitsToSuper;
-              if (useSuper && p.brawler === "Edgar") fireChance = 0.9; 
-
-              if (random() < fireChance) {
-                if (["Dynamike", "Barley"].includes(p.brawler) || checkLineOfSight(p.x, p.y, target.x, target.y)) {
-                  shootProjectile(p, target, useSuper, angleToEnemy + random(-0.05, 0.05));
-                }
+          if (d <= attackDist && p.cooldown <= 0 && p.ammo > 0) {
+            let fireChance = 0.03; 
+            if (p.brawler === "Edgar" && d <= BRAWLER_STATS["Edgar"].range) fireChance = 0.8; 
+            else if (p.brawler === "Shelly" && d <= BRAWLER_STATS["Shelly"].range * 0.6) fireChance = 0.4;
+            else if (p.brawler === "Piper" && d > range * 0.5) fireChance = 0.2; 
+            else if (["Frank", "Doug", "Mortis"].includes(p.brawler)) fireChance = 0.5;
+            let useSuper = p.hits >= BRAWLER_STATS[p.brawler].hitsToSuper;
+            if (useSuper && p.brawler === "Edgar") fireChance = 0.9; 
+            if (random() < fireChance) {
+              if (["Dynamike", "Barley"].includes(p.brawler) || checkLineOfSight(p.x, p.y, targetX, targetY)) {
+                shootProjectile(p, target, useSuper, angleToEnemy + random(-0.05, 0.05));
               }
             }
           }
         }
       } else {
         if (p.id === "blue1") {
-          if (useControllers) {
-            if (gamepads[0]) {
-              if (Math.abs(gamepads[0].axes[1]) > 0.2) nextY += gamepads[0].axes[1] * p.speed;
-              if (Math.abs(gamepads[0].axes[0]) > 0.2) nextX += gamepads[0].axes[0] * p.speed;
-            }
+          if (useControllers && gamepads[0]) {
+            if (Math.abs(gamepads[0].axes[1]) > 0.2) nextY += gamepads[0].axes[1] * p.speed;
+            if (Math.abs(gamepads[0].axes[0]) > 0.2) nextX += gamepads[0].axes[0] * p.speed;
           } else {
             if (keyIsDown(87)) nextY -= p.speed; if (keyIsDown(83)) nextY += p.speed; if (keyIsDown(65)) nextX -= p.speed; if (keyIsDown(68)) nextX += p.speed; 
           }
         } else if (p.id === "red1") {
-          if (useControllers) {
-            if (gamepads[1]) {
-              if (Math.abs(gamepads[1].axes[1]) > 0.2) nextY += gamepads[1].axes[1] * p.speed;
-              if (Math.abs(gamepads[1].axes[0]) > 0.2) nextX += gamepads[1].axes[0] * p.speed;
-            }
+          if (useControllers && gamepads[1]) {
+            if (Math.abs(gamepads[1].axes[1]) > 0.2) nextY += gamepads[1].axes[1] * p.speed;
+            if (Math.abs(gamepads[1].axes[0]) > 0.2) nextX += gamepads[1].axes[0] * p.speed;
           } else {
             if (keyIsDown(UP_ARROW)) nextY -= p.speed; if (keyIsDown(DOWN_ARROW)) nextY += p.speed; if (keyIsDown(LEFT_ARROW)) nextX -= p.speed; if (keyIsDown(RIGHT_ARROW)) nextX += p.speed;
           }
@@ -742,21 +756,38 @@ function drawGame() {
     p.x = constrain(p.x, pRad, width - pRad); p.y = constrain(p.y, pRad, height - pRad);
   }
 
+  // Ball physics & pickup loop
+  if (mode === "BRAWL BALL" && ball) {
+    if (ball.owner) {
+      let owner = activePlayers.find(pl => pl.id === ball.owner);
+      if (owner && owner.hp > 0) { ball.x = owner.x; ball.y = owner.y; } else { ball.owner = null; }
+    } else {
+      ball.x += ball.vx; ball.y += ball.vy; ball.vx *= 0.95; ball.vy *= 0.95;
+      if (ball.x < 10 && (ball.y < height/2 - 100 || ball.y > height/2 + 100)) { ball.x = 10; ball.vx *= -1; }
+      if (ball.x > width - 10 && (ball.y < height/2 - 100 || ball.y > height/2 + 100)) { ball.x = width - 10; ball.vx *= -1; }
+      if (ball.y < 10) { ball.y = 10; ball.vy *= -1; }
+      if (ball.y > height - 10) { ball.y = height - 10; ball.vy *= -1; }
+      for (let w of walls) {
+         let cx = constrain(ball.x, w.x, w.x + w.w); let cy = constrain(ball.y, w.y, w.y + w.h);
+         let dx = ball.x - cx; let dy = ball.y - cy;
+         if (dx*dx + dy*dy < 15*15) { ball.vx *= -1; ball.vy *= -1; ball.x += ball.vx; ball.y += ball.vy; }
+      }
+      for (let p of activePlayers) {
+        if (p.hp > 0 && dist(p.x, p.y, ball.x, ball.y) < p.r/2 + 15) { ball.owner = p.id; ball.vx = 0; ball.vy = 0; break; }
+      }
+    }
+  }
+
   let p1 = activePlayers.find(pl => pl.id === "blue1");
   if (p1 && p1.hp > 0 && !p1.isBot) {
     let target = getNearestEnemy(p1).target;
-    if (useControllers) {
-      if (gamepads[0]) {
-        let gp = gamepads[0];
-        let rbPressed = gp.buttons[5].pressed;
-        if (rbPressed && !p1.prevRB) p1.aimingSuper = !p1.aimingSuper;
-        p1.prevRB = rbPressed;
-
-        let isAiming = Math.abs(gp.axes[2]) > 0.2 || Math.abs(gp.axes[3]) > 0.2;
-        let aimAngle = isAiming ? atan2(gp.axes[3], gp.axes[2]) : null;
-        if (gp.buttons[7].pressed || gp.buttons[7].value > 0.5) shootProjectile(p1, target, false, p1.aimingSuper ? null : aimAngle);
-        if (gp.buttons[6].pressed || gp.buttons[6].value > 0.5) shootProjectile(p1, target, true, p1.aimingSuper ? aimAngle : null);
-      }
+    if (useControllers && gamepads[0]) {
+      let gp = gamepads[0]; let rbPressed = gp.buttons[5].pressed;
+      if (rbPressed && !p1.prevRB) p1.aimingSuper = !p1.aimingSuper; p1.prevRB = rbPressed;
+      let isAiming = Math.abs(gp.axes[2]) > 0.2 || Math.abs(gp.axes[3]) > 0.2;
+      let aimAngle = isAiming ? atan2(gp.axes[3], gp.axes[2]) : null;
+      if (gp.buttons[7].pressed || gp.buttons[7].value > 0.5) shootProjectile(p1, target, false, p1.aimingSuper ? null : aimAngle);
+      if (gp.buttons[6].pressed || gp.buttons[6].value > 0.5) shootProjectile(p1, target, true, p1.aimingSuper ? aimAngle : null);
     } else {
       if (keyIsDown(69)) shootProjectile(p1, target, false); if (keyIsDown(81)) shootProjectile(p1, target, true);  
     }
@@ -765,28 +796,20 @@ function drawGame() {
   let p2 = activePlayers.find(pl => pl.id === "red1");
   if (p2 && p2.hp > 0 && !p2.isBot) {
     let target = getNearestEnemy(p2).target;
-    if (useControllers) {
-      if (gamepads[1]) {
-        let gp = gamepads[1];
-        let rbPressed = gp.buttons[5].pressed;
-        if (rbPressed && !p2.prevRB) p2.aimingSuper = !p2.aimingSuper;
-        p2.prevRB = rbPressed;
-
-        let isAiming = Math.abs(gp.axes[2]) > 0.2 || Math.abs(gp.axes[3]) > 0.2;
-        let aimAngle = isAiming ? atan2(gp.axes[3], gp.axes[2]) : null;
-        if (gp.buttons[7].pressed || gp.buttons[7].value > 0.5) shootProjectile(p2, target, false, p2.aimingSuper ? null : aimAngle);
-        if (gp.buttons[6].pressed || gp.buttons[6].value > 0.5) shootProjectile(p2, target, true, p2.aimingSuper ? aimAngle : null);
-      }
+    if (useControllers && gamepads[1]) {
+      let gp = gamepads[1]; let rbPressed = gp.buttons[5].pressed;
+      if (rbPressed && !p2.prevRB) p2.aimingSuper = !p2.aimingSuper; p2.prevRB = rbPressed;
+      let isAiming = Math.abs(gp.axes[2]) > 0.2 || Math.abs(gp.axes[3]) > 0.2;
+      let aimAngle = isAiming ? atan2(gp.axes[3], gp.axes[2]) : null;
+      if (gp.buttons[7].pressed || gp.buttons[7].value > 0.5) shootProjectile(p2, target, false, p2.aimingSuper ? null : aimAngle);
+      if (gp.buttons[6].pressed || gp.buttons[6].value > 0.5) shootProjectile(p2, target, true, p2.aimingSuper ? aimAngle : null);
     } else {
       if (keyIsDown(16)) shootProjectile(p2, target, false); if (keyIsDown(191)) shootProjectile(p2, target, true); 
     }
   }
 
   for (let i = smashEffects.length - 1; i >= 0; i--) {
-    let fx = smashEffects[i]; fx.life--;
-    push(); translate(fx.x, fx.y); rotate(fx.angle); fill(fx.isSuper ? color(241, 196, 15, fx.life * 15) : color(255, 50, 50, fx.life * 15));
-    noStroke(); beginShape(); vertex(0, 0); vertex(cos(-fx.spread / 2) * fx.range, sin(-fx.spread / 2) * fx.range); vertex(cos(fx.spread / 2) * fx.range, sin(fx.spread / 2) * fx.range);
-    endShape(CLOSE); pop();
+    let fx = smashEffects[i]; fx.life--; push(); translate(fx.x, fx.y); rotate(fx.angle); fill(fx.isSuper ? color(241, 196, 15, fx.life * 15) : color(255, 50, 50, fx.life * 15)); noStroke(); beginShape(); vertex(0, 0); vertex(cos(-fx.spread / 2) * fx.range, sin(-fx.spread / 2) * fx.range); vertex(cos(fx.spread / 2) * fx.range, sin(fx.spread / 2) * fx.range); endShape(CLOSE); pop();
     if (fx.life <= 0) smashEffects.splice(i, 1);
   }
 
@@ -795,13 +818,8 @@ function drawGame() {
 
   for (let i = bombs.length - 1; i >= 0; i--) {
     let b = bombs[i]; b.ticks--; 
-    if (b.isDynamike) {
-      push(); fill(b.radius > 50 ? "#8B4513" : "red"); rectMode(CENTER);
-      if (b.radius > 50) rect(b.x, b.y, 20, 24, 3); else rect(b.x, b.y, 10, 20, 2);
-      if (b.ticks % 10 < 5) { fill("yellow"); circle(b.x, b.y - 10, 6); } pop();
-    } else {
-      fill(0); noStroke(); circle(b.x, b.y, 14); if (b.ticks % 10 < 5) { fill("red"); circle(b.x, b.y, 8); }
-    }
+    if (b.isDynamike) { push(); fill(b.radius > 50 ? "#8B4513" : "red"); rectMode(CENTER); if (b.radius > 50) rect(b.x, b.y, 20, 24, 3); else rect(b.x, b.y, 10, 20, 2); if (b.ticks % 10 < 5) { fill("yellow"); circle(b.x, b.y - 10, 6); } pop(); } 
+    else { fill(0); noStroke(); circle(b.x, b.y, 14); if (b.ticks % 10 < 5) { fill("red"); circle(b.x, b.y, 8); } }
 
     if (b.ticks <= 0) {
       fill(255, 100, 0, 150); let r = b.radius || 40; circle(b.x, b.y, r * 2);
@@ -814,67 +832,44 @@ function drawGame() {
       for (let e of activePlayers) {
         if (e.team !== b.ownerTeam && e.hp > 0) {
           let dx = b.x - e.x; let dy = b.y - e.y; let threshold = r + e.r / 2;
-          if (dx*dx + dy*dy < threshold*threshold) {
-            e.hp -= b.damage; addDamage(b.owner, b.damage); e.lastCombatTime = frameCount;
-            let shooter = activePlayers.find(pl => pl.id === b.owner); if (shooter) shooter.hits++;
-          }
+          if (dx*dx + dy*dy < threshold*threshold) { e.hp -= b.damage; addDamage(b.owner, b.damage); e.lastCombatTime = frameCount; let shooter = activePlayers.find(pl => pl.id === b.owner); if (shooter) shooter.hits++; }
         }
       }
+      for (let s of safes) { let dx = b.x - s.x; let dy = b.y - s.y; let threshold = r + s.r / 2; if (dx*dx + dy*dy < threshold*threshold) { s.hp -= b.damage; addDamage(b.owner, b.damage); } }
       bombs.splice(i, 1); 
     }
   }
 
   for (let i = dougSplashes.length - 1; i >= 0; i--) {
-    let ds = dougSplashes[i]; ds.life--;
-    push(); fill(255, 105, 180, ds.life * 15); noStroke(); circle(ds.x, ds.y, ds.radius); pop();
+    let ds = dougSplashes[i]; ds.life--; push(); fill(255, 105, 180, ds.life * 15); noStroke(); circle(ds.x, ds.y, ds.radius); pop();
     if (ds.life <= 0) dougSplashes.splice(i, 1);
   }
 
   for (let i = puddles.length - 1; i >= 0; i--) {
-    let pd = puddles[i]; pd.ticks--;
-    push(); fill(255, 140, 0, 120); noStroke(); circle(pd.x, pd.y, pd.radius * 2); pop();
+    let pd = puddles[i]; pd.ticks--; push(); fill(255, 140, 0, 120); noStroke(); circle(pd.x, pd.y, pd.radius * 2); pop();
     if (pd.ticks % 30 === 0) {
       for (let e of activePlayers) {
-        if (e.team !== pd.ownerTeam && e.hp > 0) {
-          let dx = pd.x - e.x; let dy = pd.y - e.y; let threshold = pd.radius + e.r / 2;
-          if (dx*dx + dy*dy < threshold*threshold) {
-            e.hp -= pd.damage; addDamage(pd.owner, pd.damage); e.lastCombatTime = frameCount;
-            let shooter = activePlayers.find(pl => pl.id === pd.owner); if (shooter) shooter.hits++;
-          }
-        }
+        if (e.team !== pd.ownerTeam && e.hp > 0) { let dx = pd.x - e.x; let dy = pd.y - e.y; let threshold = pd.radius + e.r / 2; if (dx*dx + dy*dy < threshold*threshold) { e.hp -= pd.damage; addDamage(pd.owner, pd.damage); e.lastCombatTime = frameCount; let shooter = activePlayers.find(pl => pl.id === pd.owner); if (shooter) shooter.hits++; } }
       }
+      for (let s of safes) { let dx = pd.x - s.x; let dy = pd.y - s.y; let threshold = pd.radius + s.r / 2; if (dx*dx + dy*dy < threshold*threshold) { s.hp -= pd.damage; addDamage(pd.owner, pd.damage); } }
     }
     if (pd.ticks <= 0) puddles.splice(i, 1);
   }
 
   for (let i = projectiles.length - 1; i >= 0; i--) {
-    let p = projectiles[i]; p.x += p.vx; p.y += p.vy;
-    let travelDistSq = (p.startX - p.x)**2 + (p.startY - p.y)**2;
+    let p = projectiles[i]; p.x += p.vx; p.y += p.vy; let travelDistSq = (p.startX - p.x)**2 + (p.startY - p.y)**2;
     if (travelDistSq > (p.maxRange * p.maxRange)) p.active = false;
-
-    if (p.isSuper && (p.brawlerName === "Colt" || p.brawlerName === "Shelly")) {
-      for (let j = walls.length - 1; j >= 0; j--) {
-        let w = walls[j]; if (p.x >= w.x && p.x <= w.x + w.w && p.y >= w.y && p.y <= w.y + w.h) walls.splice(j, 1); 
-      }
-    }
+    if (p.isSuper && (p.brawlerName === "Colt" || p.brawlerName === "Shelly")) { for (let j = walls.length - 1; j >= 0; j--) { let w = walls[j]; if (p.x >= w.x && p.x <= w.x + w.w && p.y >= w.y && p.y <= w.y + w.h) walls.splice(j, 1); } }
 
     noStroke();
-    if (p.brawlerName === "Dynamike") {
-      push(); fill(p.isSuper ? "#8B4513" : "red"); translate(p.x, p.y); rotate(frameCount * 0.2); 
-      rectMode(CENTER); if (p.isSuper) rect(0, 0, 20, 24, 3); else rect(0, 0, 8, 16, 2); pop();
-    } else if (p.isSuper) {
-      if (p.brawlerName === "Mortis") { fill("#8e44ad"); push(); translate(p.x, p.y); rotate(atan2(p.vy, p.vx)); ellipse(0, 0, 15, 40); pop(); } 
-      else { fill("#f1c40f"); circle(p.x, p.y, 18); }
-    } else {
-      fill(p.ownerTeam === "blue" ? "#3498db" : "#e74c3c"); circle(p.x, p.y, 14);
-    }
+    if (p.brawlerName === "Dynamike") { push(); fill(p.isSuper ? "#8B4513" : "red"); translate(p.x, p.y); rotate(frameCount * 0.2); rectMode(CENTER); if (p.isSuper) rect(0, 0, 20, 24, 3); else rect(0, 0, 8, 16, 2); pop(); } 
+    else if (p.isSuper) { if (p.brawlerName === "Mortis") { fill("#8e44ad"); push(); translate(p.x, p.y); rotate(atan2(p.vy, p.vx)); ellipse(0, 0, 15, 40); pop(); } else { fill("#f1c40f"); circle(p.x, p.y, 18); } } 
+    else { fill(p.ownerTeam === "blue" ? "#3498db" : "#e74c3c"); circle(p.x, p.y, 14); }
 
     if (!p.ignoresWalls && checkProjWallCollision(p.x, p.y)) p.active = false;
     if (p.x < 0 || p.x > width || p.y < 0 || p.y > height) p.active = false;
 
-    let hitRadius = p.isSuper && p.brawlerName === "Mortis" ? 20 : 7; 
-    let hitEnemy = false;
-
+    let hitRadius = p.isSuper && p.brawlerName === "Mortis" ? 20 : 7; let hitEnemy = false;
     for (let e of activePlayers) {
       if (e.team !== p.ownerTeam && e.hp > 0) {
         let dx = p.x - e.x; let dy = p.y - e.y; let threshold = (e.r / 2) + hitRadius;
@@ -882,27 +877,31 @@ function drawGame() {
           hitEnemy = true;
           if (p.brawlerName !== "Barley" && p.brawlerName !== "Dynamike") {
             let dmg = p.damage; if (p.brawlerName === "Piper") dmg *= constrain(Math.sqrt(travelDistSq) / p.maxRange, 0.3, 1.0);
-            e.hp -= dmg; addDamage(p.owner, dmg); e.lastCombatTime = frameCount;
-            let shooter = activePlayers.find(pl => pl.id === p.owner);
-            if (shooter) {
-              shooter.hits++; shooter.lastCombatTime = frameCount;
-              if (p.isSuper && p.brawlerName === "Mortis") shooter.hp = min(shooter.hp + p.damage, shooter.maxHp); 
-              if (p.brawlerName === "Edgar") shooter.hp = min(shooter.hp + dmg * 0.5, shooter.maxHp); 
-            }
+            e.hp -= dmg; addDamage(p.owner, dmg); e.lastCombatTime = frameCount; let shooter = activePlayers.find(pl => pl.id === p.owner);
+            if (shooter) { shooter.hits++; shooter.lastCombatTime = frameCount; if (p.isSuper && p.brawlerName === "Mortis") shooter.hp = min(shooter.hp + p.damage, shooter.maxHp); if (p.brawlerName === "Edgar") shooter.hp = min(shooter.hp + dmg * 0.5, shooter.maxHp); }
           }
           break; 
         }
       }
     }
-
-    if (hitEnemy) { p.active = false; p.hitEnemy = true; }
-
-    if (!p.active) {
-      if (p.brawlerName === "Barley") {
-        puddles.push({ x: p.x, y: p.y, radius: 45, damage: p.damage / 2, ticks: 180, owner: p.owner, ownerTeam: p.ownerTeam });
-      } else if (p.brawlerName === "Dynamike") {
-        bombs.push({ x: p.x, y: p.y, ticks: p.hitEnemy ? 0 : 30, damage: p.isSuper ? 4400 : 1600, owner: p.owner, ownerTeam: p.ownerTeam, radius: p.isSuper ? 90 : 45, isDynamike: true, });
+    if (!hitEnemy) {
+      for (let s of safes) {
+        let dx = p.x - s.x; let dy = p.y - s.y; let threshold = (s.r / 2) + hitRadius;
+        if (dx*dx + dy*dy < threshold*threshold) {
+          hitEnemy = true;
+          if (p.brawlerName !== "Barley" && p.brawlerName !== "Dynamike") {
+            let dmg = p.damage; if (p.brawlerName === "Piper") dmg *= constrain(Math.sqrt(travelDistSq) / p.maxRange, 0.3, 1.0);
+            s.hp -= dmg; addDamage(p.owner, dmg); let shooter = activePlayers.find(pl => pl.id === p.owner);
+            if (shooter) { shooter.hits++; shooter.lastCombatTime = frameCount; if (p.isSuper && p.brawlerName === "Mortis") shooter.hp = min(shooter.hp + p.damage, shooter.maxHp); if (p.brawlerName === "Edgar") shooter.hp = min(shooter.hp + dmg * 0.5, shooter.maxHp); }
+          }
+          break; 
+        }
       }
+    }
+    if (hitEnemy) { p.active = false; p.hitEnemy = true; }
+    if (!p.active) {
+      if (p.brawlerName === "Barley") puddles.push({ x: p.x, y: p.y, radius: 45, damage: p.damage / 2, ticks: 180, owner: p.owner, ownerTeam: p.ownerTeam });
+      else if (p.brawlerName === "Dynamike") bombs.push({ x: p.x, y: p.y, ticks: p.hitEnemy ? 0 : 30, damage: p.isSuper ? 4400 : 1600, owner: p.owner, ownerTeam: p.ownerTeam, radius: p.isSuper ? 90 : 45, isDynamike: true });
       projectiles.splice(i, 1); 
     }
   }
@@ -914,18 +913,15 @@ function drawGame() {
       fill(0, 0, 0, 50); ellipse(p.x, p.y + p.r / 2, p.r, p.r / 2); fill(p.team === "blue" ? "#3498db" : "#e74c3c"); circle(p.x, p.y, p.r);
       let aimAngle = 0; let target = getNearestEnemy(p).target; if (target) aimAngle = atan2(target.y - p.y, target.x - p.x);
       
-      // Override aimAngle if the player is human, using a controller, and pushing the right thumbstick
       if (useControllers && !p.isBot) {
         let gpIndex = p.id === "blue1" ? 0 : (p.id === "red1" ? 1 : -1);
         if (gpIndex >= 0 && gamepads[gpIndex]) {
           let gp = gamepads[gpIndex];
-          if (Math.abs(gp.axes[2]) > 0.2 || Math.abs(gp.axes[3]) > 0.2) {
-            aimAngle = atan2(gp.axes[3], gp.axes[2]);
-          }
+          if (Math.abs(gp.axes[2]) > 0.2 || Math.abs(gp.axes[3]) > 0.2) aimAngle = atan2(gp.axes[3], gp.axes[2]);
         }
       }
-
       drawWeapon(p, aimAngle);
+      if (mode === "BRAWL BALL" && ball && ball.owner === p.id) { push(); fill("#F5F5DC"); stroke("#8B4513"); strokeWeight(2); circle(p.x, p.y + 15, 20); noFill(); arc(p.x - 5, p.y + 15, 10, 20, -PI/2, PI/2); arc(p.x + 5, p.y + 15, 10, 20, PI/2, -PI/2); pop(); }
       if (p.hotdogTicks > 0) { push(); fill("#d2691e"); rectMode(CENTER); rect(p.x, p.y - p.r / 2 - 5, 24, 10, 5); fill("#e74c3c"); rect(p.x, p.y - p.r / 2 - 5, 28, 6, 5); pop(); }
     }
   }
@@ -968,11 +964,27 @@ function drawGame() {
 
   let blueAlive = activePlayers.some(p => p.team === "blue" && p.hp > 0);
   let redAlive = activePlayers.some(p => p.team === "red" && p.hp > 0);
-  
   let roundOver = false;
-  if (!blueAlive && !redAlive) roundOver = true; 
-  else if (!blueAlive) { redWins++; roundOver = true; } 
-  else if (!redAlive) { blueWins++; roundOver = true; }
+
+  // Win Conditions
+  if (mode === "KNOCKOUT") {
+    if (!blueAlive && !redAlive) roundOver = true; 
+    else if (!blueAlive) { redWins++; roundOver = true; } 
+    else if (!redAlive) { blueWins++; roundOver = true; }
+  } else if (mode === "BRAWL BALL") {
+    if (ball) {
+      if (ball.x < 10 && ball.y > height/2 - 100 && ball.y < height/2 + 100) { redWins++; roundOver = true; }
+      else if (ball.x > width - 10 && ball.y > height/2 - 100 && ball.y < height/2 + 100) { blueWins++; roundOver = true; }
+    }
+    if (!blueAlive && !redAlive) roundOver = true; // Round restarts on tie
+  } else if (mode === "HEIST") {
+    let bSafe = safes.find(s => s.team === "blue");
+    let rSafe = safes.find(s => s.team === "red");
+    if (bSafe && bSafe.hp <= 0 && rSafe && rSafe.hp <= 0) roundOver = true; // Tie
+    else if (bSafe && bSafe.hp <= 0) { redWins++; roundOver = true; }
+    else if (rSafe && rSafe.hp <= 0) { blueWins++; roundOver = true; }
+    if (!blueAlive && !redAlive) roundOver = true; // Round restarts on tie
+  }
 
   if (roundOver) {
     if (blueWins >= 2 || redWins >= 2) {
@@ -1022,26 +1034,17 @@ function drawMenus() {
 
 function mousePressed() {
   if (gameState === "SPLASH") {
-    if (splashStartBtn && splashStartBtn.isClicked()) {
-      gameState = "LOADING";
-      lobbyMusic.play().catch(e => console.log("Audio unlocked!"));
-      beginLoadingAssets(); // Begin pulling in heavy assets
-    }
+    if (splashStartBtn && splashStartBtn.isClicked()) { gameState = "LOADING"; lobbyMusic.play().catch(e => console.log("Audio unlocked!")); beginLoadingAssets(); }
     return;
   }
-
   if (gameState !== "LOBBY") return; 
   let menuItems = ["<- BACK"].concat(brawlerList); let itemHeight = height / menuItems.length;
   if (leftMenuOpen && mouseX < width / 2) {
-    let index = floor(mouseY / itemHeight); 
-    if (index === 0) leftMenuOpen = false; 
-    else if (index > 0 && index < menuItems.length) { players[0].name = menuItems[index]; leftMenuOpen = false; }
+    let index = floor(mouseY / itemHeight); if (index === 0) leftMenuOpen = false; else if (index > 0 && index < menuItems.length) { players[0].name = menuItems[index]; leftMenuOpen = false; }
     return;
   }
   if (rightMenuOpen && mouseX > width / 2) {
-    let index = floor(mouseY / itemHeight);
-    if (index === 0) rightMenuOpen = false; 
-    else if (index > 0 && index < menuItems.length) { players[1].name = menuItems[index]; rightMenuOpen = false; }
+    let index = floor(mouseY / itemHeight); if (index === 0) rightMenuOpen = false; else if (index > 0 && index < menuItems.length) { players[1].name = menuItems[index]; rightMenuOpen = false; }
     return;
   }
   if (controllerSwitch && controllerSwitch.isClicked()) return; 
@@ -1052,6 +1055,10 @@ function mousePressed() {
       if (btn.id === "play") { gameState = "GAME"; lobbyMusic.pause(); gameMusic.currentTime = 0; gameMusic.play().catch((e) => {}); initGame(); } 
       else if (btn.id === "brawlers_left") leftMenuOpen = !leftMenuOpen; 
       else if (btn.id === "brawlers_right") rightMenuOpen = !rightMenuOpen;
+      else if (btn.id === "mode_select") {
+        currentModeIndex = (currentModeIndex + 1) % gameModes.length;
+        btn.text = "MODE: " + gameModes[currentModeIndex];
+      }
     }
   }
 }
