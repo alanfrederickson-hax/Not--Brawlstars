@@ -608,7 +608,7 @@ function drawLoading() {
 
 function drawLobby() {
   drawBackground(); 
-  if (showLobbyTitle) { push(); fill("#ff2e43"); stroke("#000000"); strokeWeight(8); textAlign(CENTER, TOP); textSize(80); text("BRAWL STARS 2.0", width / 2, 40); pop(); }
+  if (showLobbyTitle) { push(); fill("#ff2e43"); stroke("#000000"); strokeWeight(8); textAlign(CENTER, TOP); textSize(80); text("BrawlTards", width / 2, 40); pop(); }
   for (let player of players) { player.update(); player.draw(); }
   for (let btn of buttons) { btn.update(mouseX, mouseY); btn.draw(); }
   if (controllerSwitch) { controllerSwitch.update(mouseX, mouseY); controllerSwitch.draw(); }
