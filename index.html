@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BrawlStars 2.0</title>
     
-    <link rel="icon" type="image/png" href="./Logo.png">
+    <link rel="icon" type="image/png" href="Brawlogo.png">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -172,7 +172,7 @@ function preload() {
   if (!isPreview) {
     try { loadFont('./LilitaOne.ttf', (f) => { customFont = f; }); } catch (e) {}
   }
-  loadImage('./Logo.png', (img) => { brawlerImages["Logo"] = img; }, (err) => {});
+  loadImage('Brawlogo.png', (img) => { brawlerImages["Logo"] = img; }, (err) => {});
 }
 
 function beginLoadingAssets() {
@@ -945,17 +945,28 @@ function drawGame() {
   if (primaryBlue) {
     fill(0, 150); rect(20, height - 100, 360, 80, 10); fill(255); textAlign(LEFT, TOP); textSize(20);
     let bProj = BRAWLER_STATS[primaryBlue.brawler].projectiles; text(`${primaryBlue.brawler} - ATK: ${bProj > 1 ? `${primaryBlue.damage} (x${bProj})` : primaryBlue.damage}`, 30, height - 90);
-    textSize(14); fill(200); text(`${primaryBlue.superDesc}\nE to Attack | Q to Super`, 30, height - 60);
+    textSize(14); fill(200); 
+    if (useControllers) text(`${primaryBlue.superDesc}`, 30, height - 60);
+    else text(`${primaryBlue.superDesc}\nE to Attack | Q to Super`, 30, height - 60);
   }
 
   let primaryRed = activePlayers.find(pl => pl.id === "red1");
   if (primaryRed) {
     fill(0, 150); rect(width - 380, height - 100, 360, 80, 10); fill(255); textAlign(RIGHT, TOP); textSize(20);
     let rProj = BRAWLER_STATS[primaryRed.brawler].projectiles; text(`ATK: ${rProj > 1 ? `${primaryRed.damage} (x${rProj})` : primaryRed.damage} - ${primaryRed.brawler}`, width - 30, height - 90);
-    textSize(14); fill(200); text(`${primaryRed.superDesc}\nSHIFT to Attack | / to Super`, width - 30, height - 60);
+    textSize(14); fill(200); 
+    if (useControllers) text(`${primaryRed.superDesc}`, width - 30, height - 60);
+    else text(`${primaryRed.superDesc}\nSHIFT to Attack | / to Super`, width - 30, height - 60);
   }
 
-  fill(0, 150); noStroke(); textSize(20); textAlign(LEFT, TOP); text("ESC = Lobby | Blue: WASD | Red: Arrows", 20, 20);
+  fill(0, 150); noStroke(); textAlign(LEFT, TOP); 
+  if (useControllers) {
+    textSize(20); text("ESC = Lobby", 20, 20);
+    textSize(16); fill(255);
+    text("LS = Walk  /  RS = Aim\nRT = Main Attack\nLT = Super Attack\nRB = Change Aim Mode", 20, 50);
+  } else {
+    textSize(20); text("ESC = Lobby | Blue: WASD | Red: Arrows", 20, 20);
+  }
 
   push(); fill(0, 0, 0, 150); rectMode(CORNER); rect(10, height - 145, 120, 40, 8); rect(width - 130, height - 145, 120, 40, 8); 
   fill("#f1c40f"); textSize(24); textAlign(LEFT, TOP); text(`WINS: ${blueWins}`, 20, height - 135); textAlign(RIGHT, TOP); text(`WINS: ${redWins}`, width - 20, height - 135); pop();
