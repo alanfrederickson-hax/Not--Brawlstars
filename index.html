@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BrawlStars 2.0</title>
     
-    <link rel="icon" type="image/png" href="BrawlTard.png">
+    <link rel="icon" type="image/png" href="./Logo.png">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -177,7 +177,7 @@ function preload() {
       loadFont('./LilitaOne.ttf', (f) => { customFont = f; });
     } catch (e) {}
   }
-  loadImage('BrawlTard.png', (img) => { brawlerImages["Logo"] = img; }, (err) => {});
+  loadImage('./Logo.png', (img) => { brawlerImages["Logo"] = img; }, (err) => {});
 }
 
 // NEW: Asynchronously load all heavy character assets AFTER the user clicks start!
@@ -577,7 +577,7 @@ function drawSplash() {
     push(); fill(255); textAlign(CENTER, CENTER); textSize(60);
     let scalePulse = 1.0 + sin(frameCount * 0.05) * 0.05;
     translate(width / 2, height / 2 - 50); scale(scalePulse);
-    text("BrawlTards", 0, 0);
+    text("BRAWL STARS 2.0", 0, 0);
     pop();
   }
 
@@ -608,7 +608,7 @@ function drawLoading() {
 
 function drawLobby() {
   drawBackground(); 
-  if (showLobbyTitle) { push(); fill("#ff2e43"); stroke("#000000"); strokeWeight(8); textAlign(CENTER, TOP); textSize(80); text("BrawlTards", width / 2, 40); pop(); }
+  if (showLobbyTitle) { push(); fill("#ff2e43"); stroke("#000000"); strokeWeight(8); textAlign(CENTER, TOP); textSize(80); text("BRAWL STARS 2.0", width / 2, 40); pop(); }
   for (let player of players) { player.update(); player.draw(); }
   for (let btn of buttons) { btn.update(mouseX, mouseY); btn.draw(); }
   if (controllerSwitch) { controllerSwitch.update(mouseX, mouseY); controllerSwitch.draw(); }
@@ -901,6 +901,18 @@ function drawGame() {
       if (p.hits >= BRAWLER_STATS[p.brawler].hitsToSuper) { noFill(); stroke("yellow"); strokeWeight(4); circle(p.x, p.y, p.r + 15); noStroke(); }
       fill(0, 0, 0, 50); ellipse(p.x, p.y + p.r / 2, p.r, p.r / 2); fill(p.team === "blue" ? "#3498db" : "#e74c3c"); circle(p.x, p.y, p.r);
       let aimAngle = 0; let target = getNearestEnemy(p).target; if (target) aimAngle = atan2(target.y - p.y, target.x - p.x);
+      
+      // Override aimAngle if the player is human, using a controller, and pushing the right thumbstick
+      if (useControllers && !p.isBot) {
+        let gpIndex = p.id === "blue1" ? 0 : (p.id === "red1" ? 1 : -1);
+        if (gpIndex >= 0 && gamepads[gpIndex]) {
+          let gp = gamepads[gpIndex];
+          if (Math.abs(gp.axes[0]) > 0.2 || Math.abs(gp.axes[1]) > 0.2) {
+            aimAngle = atan2(gp.axes[1], gp.axes[0]);
+          }
+        }
+      }
+
       drawWeapon(p, aimAngle);
       if (p.hotdogTicks > 0) { push(); fill("#d2691e"); rectMode(CENTER); rect(p.x, p.y - p.r / 2 - 5, 24, 10, 5); fill("#e74c3c"); rect(p.x, p.y - p.r / 2 - 5, 28, 6, 5); pop(); }
     }
