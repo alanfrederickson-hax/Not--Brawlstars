@@ -290,7 +290,7 @@ function startNextRound() {
 
   let mode = gameModes[currentModeIndex];
   if (mode === "BRAWL BALL") {
-    ball = {x: width / 2, y: height / 2, vx: 0, vy: 0, owner: null};
+    ball = {x: width / 2, y: height / 2, vx: 0, vy: 0, owner: null, lastTeam: null};
   } else if (mode === "HEIST") {
     safes.push({id: "blueSafe", team: "blue", hp: 58000, maxHp: 58000, x: width * 0.08, y: height / 2, r: 80});
     safes.push({id: "redSafe", team: "red", hp: 58000, maxHp: 58000, x: width * 0.92, y: height / 2, r: 80});
@@ -394,6 +394,7 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     }
     
     ball.owner = null;
+    ball.lastTeam = shooter.team; // Track who kicked it
     ball.vx = cos(bAngle) * (isSuper ? 25 : 15);
     ball.vy = sin(bAngle) * (isSuper ? 25 : 15);
     ball.x += ball.vx * 2; ball.y += ball.vy * 2; // Offset it slightly so they don't instapickup
@@ -812,20 +813,41 @@ function drawGame() {
   if (mode === "BRAWL BALL" && ball) {
     if (ball.owner) {
       let owner = activePlayers.find(pl => pl.id === ball.owner);
-      if (owner && owner.hp > 0) { ball.x = owner.x; ball.y = owner.y; } else { ball.owner = null; }
+      if (owner && owner.hp > 0) { 
+        ball.x = owner.x; ball.y = owner.y; 
+        
+        // Prevent walking into own goal - force drop ball
+        if (owner.team === "blue" && ball.x < 20 && ball.y > height/2 - 100 && ball.y < height/2 + 100) {
+          ball.owner = null; ball.x = 25; ball.vx = 8;
+        } else if (owner.team === "red" && ball.x > width - 20 && ball.y > height/2 - 100 && ball.y < height/2 + 100) {
+          ball.owner = null; ball.x = width - 25; ball.vx = -8;
+        }
+      } else { 
+        ball.owner = null; 
+      }
     } else {
       ball.x += ball.vx; ball.y += ball.vy; ball.vx *= 0.95; ball.vy *= 0.95;
-      if (ball.x < 10 && (ball.y < height/2 - 100 || ball.y > height/2 + 100)) { ball.x = 10; ball.vx *= -1; }
-      if (ball.x > width - 10 && (ball.y < height/2 - 100 || ball.y > height/2 + 100)) { ball.x = width - 10; ball.vx *= -1; }
+      
+      let inGoalY = ball.y > height/2 - 100 && ball.y < height/2 + 100;
+      
+      if (ball.x < 20) {
+        if (!inGoalY || ball.lastTeam === "blue") { ball.x = 20; ball.vx *= -1; }
+      }
+      if (ball.x > width - 20) {
+        if (!inGoalY || ball.lastTeam === "red") { ball.x = width - 20; ball.vx *= -1; }
+      }
       if (ball.y < 10) { ball.y = 10; ball.vy *= -1; }
       if (ball.y > height - 10) { ball.y = height - 10; ball.vy *= -1; }
+      
       for (let w of walls) {
          let cx = constrain(ball.x, w.x, w.x + w.w); let cy = constrain(ball.y, w.y, w.y + w.h);
          let dx = ball.x - cx; let dy = ball.y - cy;
          if (dx*dx + dy*dy < 15*15) { ball.vx *= -1; ball.vy *= -1; ball.x += ball.vx; ball.y += ball.vy; }
       }
       for (let p of activePlayers) {
-        if (p.hp > 0 && dist(p.x, p.y, ball.x, ball.y) < p.r/2 + 15) { ball.owner = p.id; ball.vx = 0; ball.vy = 0; break; }
+        if (p.hp > 0 && dist(p.x, p.y, ball.x, ball.y) < p.r/2 + 15) { 
+          ball.owner = p.id; ball.lastTeam = p.team; ball.vx = 0; ball.vy = 0; break; 
+        }
       }
     }
   }
@@ -1058,8 +1080,8 @@ function drawGame() {
     else if (!redAlive) { blueWins++; roundOver = true; }
   } else if (mode === "BRAWL BALL") {
     if (ball) {
-      if (ball.x < 20 && ball.y > height/2 - 100 && ball.y < height/2 + 100) { redWins++; roundOver = true; }
-      else if (ball.x > width - 20 && ball.y > height/2 - 100 && ball.y < height/2 + 100) { blueWins++; roundOver = true; }
+      if (ball.x < 20 && ball.y > height/2 - 100 && ball.y < height/2 + 100 && ball.lastTeam === "red") { redWins++; roundOver = true; }
+      else if (ball.x > width - 20 && ball.y > height/2 - 100 && ball.y < height/2 + 100 && ball.lastTeam === "blue") { blueWins++; roundOver = true; }
     }
   } else if (mode === "HEIST") {
     let bSafe = safes.find(s => s.team === "blue");
