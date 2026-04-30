@@ -384,8 +384,14 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
       if (shooter.ammo <= 0) return; 
       shooter.ammo--; 
     }
+    
     let bAngle = overrideAngle !== null ? overrideAngle : random(TWO_PI);
-    if (target && overrideAngle === null && !target.isInvisible) bAngle = atan2(target.y - shooter.y, target.x - shooter.x);
+    // NEW: Auto-aim when holding the ball targets the enemy goal!
+    if (overrideAngle === null) {
+      let enemyGoalX = shooter.team === "blue" ? width : 0;
+      bAngle = atan2(height / 2 - shooter.y, enemyGoalX - shooter.x);
+    }
+    
     ball.owner = null;
     ball.vx = cos(bAngle) * (isSuper ? 25 : 15);
     ball.vy = sin(bAngle) * (isSuper ? 25 : 15);
@@ -1032,15 +1038,16 @@ function drawGame() {
     else if (!redAlive) { blueWins++; roundOver = true; }
   } else if (mode === "BRAWL BALL") {
     if (ball) {
-      if (ball.x < 10 && ball.y > height/2 - 100 && ball.y < height/2 + 100) { redWins++; roundOver = true; }
-      else if (ball.x > width - 10 && ball.y > height/2 - 100 && ball.y < height/2 + 100) { blueWins++; roundOver = true; }
+      // Expanded hitboxes so walking the ball into the net triggers a goal (players can't reach x < 10 due to map borders)
+      if (ball.x <= 35 && ball.y > height/2 - 100 && ball.y < height/2 + 100) { redWins++; roundOver = true; }
+      else if (ball.x >= width - 35 && ball.y > height/2 - 100 && ball.y < height/2 + 100) { blueWins++; roundOver = true; }
     }
   } else if (mode === "HEIST") {
     let bSafe = safes.find(s => s.team === "blue");
     let rSafe = safes.find(s => s.team === "red");
-    if (bSafe && bSafe.hp <= 0 && rSafe && rSafe.hp <= 0) roundOver = true; // Tie
-    else if (bSafe && bSafe.hp <= 0) { redWins++; roundOver = true; }
-    else if (rSafe && rSafe.hp <= 0) { blueWins++; roundOver = true; }
+    if (bSafe && bSafe.hp <= 0 && rSafe && rSafe.hp <= 0) { blueWins = 2; redWins = 2; roundOver = true; } // Tie ends match immediately
+    else if (bSafe && bSafe.hp <= 0) { redWins = 2; roundOver = true; } // Insta-win ends match immediately
+    else if (rSafe && rSafe.hp <= 0) { blueWins = 2; roundOver = true; } // Insta-win ends match immediately
   }
 
   if (roundOver) {
