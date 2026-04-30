@@ -256,7 +256,7 @@ function createPlayerObject(id, team, brawlerName, isBot) {
     hits: 0, ammo: 3, reloadTimer: 0, lastCombatTime: 0, dashTicks: 0, dashVx: 0, dashVy: 0, hasDamagedInDash: false,
     hp: stats.hp, maxHp: stats.hp, damage: stats.damage, superDesc: stats.superDesc,
     stunTicks: 0, attackWindup: 0, leonShots: 0, edgarShots: 0, coltShots: 0, jumpTicks: 0, isInvisible: false, invisTicks: 0, hotdogTicks: 0,
-    aimingSuper: false, prevRB: false, respawnTimer: 0
+    aimingSuper: false, prevRB: false, respawnTimer: 0, superCooldown: 0
   };
 }
 
@@ -307,7 +307,7 @@ function startNextRound() {
     p.hp = p.maxHp; p.cooldown = 0; p.ammo = 3; p.reloadTimer = 0; p.stunTicks = 0; p.attackWindup = 0;
     p.leonShots = 0; p.edgarShots = 0; p.coltShots = 0; p.lastCombatTime = frameCount; 
     p.dashTicks = 0; p.jumpTicks = 0; p.isInvisible = false; p.invisTicks = 0; p.hotdogTicks = 0;
-    p.aimingSuper = false; p.prevRB = false; p.respawnTimer = 0;
+    p.aimingSuper = false; p.prevRB = false; p.respawnTimer = 0; p.superCooldown = 0;
   }
 }
 
@@ -373,7 +373,9 @@ function getNearestEnemy(player) {
 }
 
 function shootProjectile(shooter, target, isSuper = false, overrideAngle = null) {
-  if (shooter.cooldown > 0 || shooter.stunTicks > 0) return; 
+  if (shooter.stunTicks > 0 || shooter.attackWindup > 0) return; 
+  if (isSuper && shooter.superCooldown > 0) return;
+  if (!isSuper && shooter.cooldown > 0) return;
 
   // NEW: Ball Shooting Logic overrides normal weapons!
   if (gameModes[currentModeIndex] === "BRAWL BALL" && ball && ball.owner === shooter.id) {
@@ -395,7 +397,8 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     ball.vx = cos(bAngle) * (isSuper ? 25 : 15);
     ball.vy = sin(bAngle) * (isSuper ? 25 : 15);
     ball.x += ball.vx * 2; ball.y += ball.vy * 2; // Offset it slightly so they don't instapickup
-    shooter.cooldown = shooter.maxCooldown;
+    
+    if (isSuper) shooter.superCooldown = shooter.maxCooldown; else shooter.cooldown = shooter.maxCooldown;
     shooter.lastCombatTime = frameCount;
     return; 
   }
@@ -423,7 +426,8 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
         }
       }
     }
-    shooter.cooldown = shooter.maxCooldown; return; 
+    if (isSuper) shooter.superCooldown = shooter.maxCooldown; else shooter.cooldown = shooter.maxCooldown; 
+    return; 
   }
 
   if (shooter.brawler === "Barley" && isSuper) {
@@ -433,37 +437,39 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
       let tx = cx + off[0]; let ty = cy + off[1];
       projectiles.push({ x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y, maxRange: dist(shooter.x, shooter.y, tx, ty), brawlerName: shooter.brawler, vx: cos(atan2(ty - shooter.y, tx - shooter.x)) * 12, vy: sin(atan2(ty - shooter.y, tx - shooter.x)) * 12, damage: shooter.damage, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: true, isSuper: true, active: true, });
     }
-    shooter.cooldown = shooter.maxCooldown; return; 
+    shooter.superCooldown = shooter.maxCooldown; return; 
   }
 
-  if (shooter.brawler === "Leon" && isSuper) { shooter.isInvisible = true; shooter.invisTicks = 360; shooter.cooldown = shooter.maxCooldown; return; }
+  if (shooter.brawler === "Leon" && isSuper) { shooter.isInvisible = true; shooter.invisTicks = 360; shooter.superCooldown = shooter.maxCooldown; return; }
 
   if (shooter.brawler === "Piper" && isSuper) {
     shooter.jumpTicks = 45; shooter.jumpVx = cos(angle + PI) * (350 / 45); shooter.jumpVy = sin(angle + PI) * (350 / 45);
     let offsets = [[-15, -15], [15, -15], [-15, 15], [15, 15]];
     for (let off of offsets) bombs.push({ x: shooter.x + off[0], y: shooter.y + off[1], ticks: 60, damage: 1800, owner: shooter.id, ownerTeam: shooter.team });
-    shooter.cooldown = shooter.maxCooldown; return;
+    shooter.superCooldown = shooter.maxCooldown; return;
   }
 
   if (shooter.brawler === "Edgar" && isSuper) {
     shooter.jumpTicks = 45; let jumpDist = (target && target.isInvisible) ? 300 : Math.min(400, target ? dist(shooter.x, shooter.y, target.x, target.y) : 300);
-    shooter.jumpVx = cos(angle) * (jumpDist / 45); shooter.jumpVy = sin(angle) * (jumpDist / 45); shooter.cooldown = shooter.maxCooldown; return;
+    shooter.jumpVx = cos(angle) * (jumpDist / 45); shooter.jumpVy = sin(angle) * (jumpDist / 45); shooter.superCooldown = shooter.maxCooldown; return;
   }
 
   if (shooter.brawler === "Mortis") {
     if (isSuper) { projectiles.push({ x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y, maxRange: BRAWLER_STATS["Mortis"].range * 2, brawlerName: shooter.brawler, vx: cos(angle) * 15, vy: sin(angle) * 15, damage: 1800, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: true, isSuper: true, active: true, }); } 
     else { shooter.dashTicks = 12; shooter.dashVx = cos(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.dashVy = sin(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.hasDamagedInDash = false; }
-    shooter.cooldown = shooter.maxCooldown; return; 
+    if (isSuper) shooter.superCooldown = shooter.maxCooldown; else shooter.cooldown = shooter.maxCooldown; return; 
   }
 
   if (shooter.brawler === "Frank") {
     shooter.attackWindup = floor(10 + 40 * Math.max(0.1, shooter.hp / shooter.maxHp)); 
-    shooter.windupAngle = angle; shooter.windupIsSuper = isSuper; shooter.cooldown = shooter.maxCooldown + shooter.attackWindup; return; 
+    shooter.windupAngle = angle; shooter.windupIsSuper = isSuper; 
+    if (isSuper) shooter.superCooldown = shooter.maxCooldown + shooter.attackWindup; else shooter.cooldown = shooter.maxCooldown + shooter.attackWindup; 
+    return; 
   }
 
-  if (shooter.brawler === "Leon") { shooter.leonShots = BRAWLER_STATS["Leon"].projectiles * (isSuper ? 2 : 1); shooter.leonTimer = 0; shooter.leonAngle = angle; shooter.leonIsSuper = isSuper; shooter.cooldown = shooter.maxCooldown; return; }
+  if (shooter.brawler === "Leon") { shooter.leonShots = BRAWLER_STATS["Leon"].projectiles * (isSuper ? 2 : 1); shooter.leonTimer = 0; shooter.leonAngle = angle; shooter.leonIsSuper = isSuper; if (isSuper) shooter.superCooldown = shooter.maxCooldown; else shooter.cooldown = shooter.maxCooldown; return; }
   if (shooter.brawler === "Edgar" && !isSuper) { shooter.edgarShots = BRAWLER_STATS["Edgar"].projectiles; shooter.edgarTimer = 0; shooter.edgarAngle = angle; shooter.cooldown = shooter.maxCooldown; return; }
-  if (shooter.brawler === "Colt") { shooter.coltShots = isSuper ? BRAWLER_STATS["Colt"].superProjectiles : BRAWLER_STATS["Colt"].projectiles; shooter.coltTimer = 0; shooter.coltAngle = angle; shooter.coltIsSuper = isSuper; shooter.cooldown = shooter.maxCooldown; return; }
+  if (shooter.brawler === "Colt") { shooter.coltShots = isSuper ? BRAWLER_STATS["Colt"].superProjectiles : BRAWLER_STATS["Colt"].projectiles; shooter.coltTimer = 0; shooter.coltAngle = angle; shooter.coltIsSuper = isSuper; if (isSuper) shooter.superCooldown = shooter.maxCooldown; else shooter.cooldown = shooter.maxCooldown; return; }
 
   let ignoresWalls = ["Doug", "Dynamike", "Barley"].includes(shooter.brawler);
   let projCount = isSuper ? BRAWLER_STATS[shooter.brawler].superProjectiles : BRAWLER_STATS[shooter.brawler].projectiles;
@@ -476,7 +482,7 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     }
     projectiles.push({ x: spawnX, y: spawnY, startX: spawnX, startY: spawnY, maxRange: BRAWLER_STATS[shooter.brawler].range, brawlerName: shooter.brawler, vx: cos(finalAngle) * 12, vy: sin(finalAngle) * 12, damage: shooter.damage, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: ignoresWalls, isSuper: isSuper, active: true, });
   }
-  shooter.cooldown = shooter.maxCooldown;
+  if (isSuper) shooter.superCooldown = shooter.maxCooldown; else shooter.cooldown = shooter.maxCooldown;
 }
 
 function executeFrankSmash(frank) {
@@ -664,6 +670,7 @@ function drawGame() {
     }
     
     if (p.cooldown > 0) p.cooldown--;
+    if (p.superCooldown > 0) p.superCooldown--;
     if (p.ammo < 3) { p.reloadTimer++; if (p.reloadTimer >= BRAWLER_STATS[p.brawler].reloadTime) { p.ammo++; p.reloadTimer = 0; } } else { p.reloadTimer = 0; }
     if (frameCount - p.lastCombatTime > 180 && p.hp > 0 && p.hp < p.maxHp) p.hp = min(p.maxHp, p.hp + p.maxHp * 0.002);
     if (p.invisTicks > 0) { p.invisTicks--; if (p.invisTicks <= 0) p.isInvisible = false; }
@@ -754,13 +761,22 @@ function drawGame() {
             nextX += cos(moveAngle) * p.speed; nextY += sin(moveAngle) * p.speed;
           }
 
-          if (d <= attackDist && p.cooldown <= 0 && p.ammo > 0) {
+          let useSuper = p.hits >= BRAWLER_STATS[p.brawler].hitsToSuper;
+          let wantsToFire = false;
+          if (useSuper && p.superCooldown <= 0) {
+            wantsToFire = true;
+          } else if (p.cooldown <= 0 && p.ammo > 0) {
+            wantsToFire = true;
+            useSuper = false; 
+          }
+
+          if (d <= attackDist && wantsToFire) {
             let fireChance = 0.03; 
             if (p.brawler === "Edgar" && d <= BRAWLER_STATS["Edgar"].range) fireChance = 0.8; 
             else if (p.brawler === "Shelly" && d <= BRAWLER_STATS["Shelly"].range * 0.6) fireChance = 0.4;
             else if (p.brawler === "Piper" && d > range * 0.5) fireChance = 0.2; 
             else if (["Frank", "Doug", "Mortis"].includes(p.brawler)) fireChance = 0.5;
-            let useSuper = p.hits >= BRAWLER_STATS[p.brawler].hitsToSuper;
+            
             if (useSuper && p.brawler === "Edgar") fireChance = 0.9; 
             if (random() < fireChance) {
               if (["Dynamike", "Barley"].includes(p.brawler) || checkLineOfSight(p.x, p.y, targetX, targetY)) {
