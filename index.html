@@ -457,7 +457,7 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
       projectiles.push({ x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y, maxRange: BRAWLER_STATS["Mortis"].range * 3.5, brawlerName: shooter.brawler, vx: cos(angle) * 15, vy: sin(angle) * 15, damage: 1800, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: true, isSuper: true, active: true, }); 
     } 
     else { 
-      shooter.dashTicks = 10; shooter.dashVx = cos(angle) * ((BRAWLER_STATS["Mortis"].range * 0.6) / 10); shooter.dashVy = sin(angle) * ((BRAWLER_STATS["Mortis"].range * 0.6) / 10); shooter.dashHitTargets = []; 
+      shooter.dashTicks = 10; shooter.dashVx = cos(angle) * ((BRAWLER_STATS["Mortis"].range * 0.85) / 10); shooter.dashVy = sin(angle) * ((BRAWLER_STATS["Mortis"].range * 0.85) / 10); shooter.dashHitTargets = []; 
     }
     if (isSuper) shooter.superCooldown = shooter.maxCooldown; else shooter.cooldown = shooter.maxCooldown; return; 
   }
@@ -536,7 +536,7 @@ function executeFrankSmash(frank) {
 }
 
 function fireLeonBlade(leon) {
-  let finalAngle = leon.leonAngle - (((BRAWLER_STATS["Leon"].projectiles * (leon.leonIsSuper ? 2 : 1)) - leon.leonShots) * 0.15);
+  let finalAngle = leon.leonAngle - (((BRAWLER_STATS["Leon"].projectiles * (leon.leonIsSuper ? 2 : 1)) - leon.leonShots) * 0.08); // Reduced spread for tighter shots
   projectiles.push({ x: leon.x, y: leon.y, startX: leon.x, startY: leon.y, maxRange: BRAWLER_STATS["Leon"].range, brawlerName: "Leon", vx: cos(finalAngle) * 12, vy: sin(finalAngle) * 12, damage: leon.damage, owner: leon.id, ownerTeam: leon.team, ignoresWalls: false, isSuper: leon.leonIsSuper, active: true, });
 }
 
@@ -785,7 +785,7 @@ function drawGame() {
             let angleDiff = desiredAngle - p.currentMoveAngle;
             while (angleDiff > PI) angleDiff -= TWO_PI;
             while (angleDiff < -PI) angleDiff += TWO_PI;
-            p.currentMoveAngle += angleDiff * 0.15; // Smooth steering!
+            p.currentMoveAngle += angleDiff * 0.15; 
 
             nextX += cos(p.currentMoveAngle) * p.speed; nextY += sin(p.currentMoveAngle) * p.speed;
           }
@@ -978,7 +978,14 @@ function drawGame() {
         else { fill("#8e44ad"); push(); translate(p.x, p.y); rotate(atan2(p.vy, p.vx)); ellipse(0, 0, 15, 40); pop(); }
       } else { fill("#f1c40f"); circle(p.x, p.y, 18); } 
     } 
-    else { fill(p.ownerTeam === "blue" ? "#3498db" : "#e74c3c"); circle(p.x, p.y, 14); }
+    else { 
+      fill(p.ownerTeam === "blue" ? "#3498db" : "#e74c3c"); 
+      if (p.ownerTeam === "blue" && (mode === "BRAWL BALL" || mode === "HEIST")) {
+        stroke(0); strokeWeight(1.5);
+      }
+      circle(p.x, p.y, 14); 
+      noStroke();
+    }
 
     if (!p.ignoresWalls && checkProjWallCollision(p.x, p.y)) p.active = false;
     if (p.x < 0 || p.x > width || p.y < 0 || p.y > height) p.active = false;
