@@ -177,10 +177,11 @@ function preload() {
 
 function beginLoadingAssets() {
   let toLoad = [
-    {name: "Doug", path: "./Doug.webp"}, {name: "Leon", path: "./Leon.webp"}, {name: "Shelly", path: "./Shelly.webp"},
-    {name: "Frank", path: "./Frank.webp"}, {name: "Edgar", path: "./edgar.gif"}, {name: "Barley", path: "./Barley.webp"},
-    {name: "Dynamike", path: "./Dynamike.webp"}, {name: "Colt", path: "./Colt.webp"}, {name: "Mortis", path: "./Mortis.png"},
-    {name: "Piper", path: "./Piper.webp"}, {name: "ShellyWeapon", path: "./shotgun.png"}
+    {name: "Doug", path: "Doug.webp"}, {name: "Leon", path: "Leon.webp"}, {name: "Shelly", path: "Shelly.webp"},
+    {name: "Frank", path: "Frank.webp"}, {name: "Edgar", path: "edgar.gif"}, {name: "Barley", path: "Barley.webp"},
+    {name: "Dynamike", path: "Dynamike.webp"}, {name: "Colt", path: "Colt.webp"}, {name: "Mortis", path: "Mortis.png"},
+    {name: "Piper", path: "Piper.webp"}, {name: "ShellyWeapon", path: "shotgun.png"},
+    {name: "LeonWeapon", path: "glaive.png"}, {name: "MortisSuper", path: "bats.png"}
   ];
   totalAssets = toLoad.length; loadedAssets = 0;
   for(let item of toLoad) {
@@ -230,11 +231,9 @@ function initMap() {
   let mode = gameModes[currentModeIndex];
   
   if (mode === "BRAWL BALL") {
-    // Brawl Ball Specific Map - Goals covered by long center walls, open middle
     walls.push({ x: width * 0.15, y: height / 2 - 150, w: 60, h: 300 }); 
     walls.push({ x: width * 0.85 - 60, y: height / 2 - 150, w: 60, h: 300 });
   } else {
-    // Knockout & Heist Map
     walls.push({ x: width / 2 - 40, y: height / 2 - 100, w: 80, h: 200 }); 
     walls.push({ x: width / 2 - 150, y: height * 0.15, w: 300, h: 60 });   
     walls.push({ x: width / 2 - 150, y: height * 0.85 - 60, w: 300, h: 60 }); 
@@ -256,7 +255,7 @@ function createPlayerObject(id, team, brawlerName, isBot) {
     hits: 0, ammo: 3, reloadTimer: 0, lastCombatTime: 0, dashTicks: 0, dashVx: 0, dashVy: 0, dashHitTargets: [],
     hp: stats.hp, maxHp: stats.hp, damage: stats.damage, superDesc: stats.superDesc,
     stunTicks: 0, attackWindup: 0, leonShots: 0, edgarShots: 0, coltShots: 0, jumpTicks: 0, isInvisible: false, invisTicks: 0, hotdogTicks: 0,
-    aimingSuper: false, prevRB: false, respawnTimer: 0, superCooldown: 0
+    aimingSuper: false, prevRB: false, respawnTimer: 0, superCooldown: 0, currentMoveAngle: 0
   };
 }
 
@@ -307,7 +306,7 @@ function startNextRound() {
     p.hp = p.maxHp; p.cooldown = 0; p.ammo = 3; p.reloadTimer = 0; p.stunTicks = 0; p.attackWindup = 0;
     p.leonShots = 0; p.edgarShots = 0; p.coltShots = 0; p.lastCombatTime = frameCount; 
     p.dashTicks = 0; p.jumpTicks = 0; p.isInvisible = false; p.invisTicks = 0; p.hotdogTicks = 0;
-    p.aimingSuper = false; p.prevRB = false; p.respawnTimer = 0; p.superCooldown = 0; p.dashHitTargets = [];
+    p.aimingSuper = false; p.prevRB = false; p.respawnTimer = 0; p.superCooldown = 0; p.dashHitTargets = []; p.currentMoveAngle = 0;
   }
 }
 
@@ -352,7 +351,6 @@ function resolveWallStuck(player) {
   }
 }
 
-// Bot Math - Checks enemies & safes seamlessly!
 function getNearestEnemy(player) {
   let nearest = null; let minDistSq = Infinity;
   for (let e of activePlayers) {
@@ -377,7 +375,6 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
   if (isSuper && shooter.superCooldown > 0) return;
   if (!isSuper && shooter.cooldown > 0) return;
 
-  // NEW: Ball Shooting Logic overrides normal weapons!
   if (gameModes[currentModeIndex] === "BRAWL BALL" && ball && ball.owner === shooter.id) {
     if (isSuper) { 
       if (shooter.hits < BRAWLER_STATS[shooter.brawler].hitsToSuper) return; 
@@ -394,10 +391,10 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
     }
     
     ball.owner = null;
-    ball.lastTeam = shooter.team; // Track who kicked it
+    ball.lastTeam = shooter.team; 
     ball.vx = cos(bAngle) * (isSuper ? 25 : 15);
     ball.vy = sin(bAngle) * (isSuper ? 25 : 15);
-    ball.x += ball.vx * 2; ball.y += ball.vy * 2; // Offset it slightly so they don't instapickup
+    ball.x += ball.vx * 2; ball.y += ball.vy * 2; 
     
     if (isSuper) shooter.superCooldown = shooter.maxCooldown; else shooter.cooldown = shooter.maxCooldown;
     shooter.lastCombatTime = frameCount;
@@ -456,8 +453,12 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
   }
 
   if (shooter.brawler === "Mortis") {
-    if (isSuper) { projectiles.push({ x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y, maxRange: BRAWLER_STATS["Mortis"].range * 2, brawlerName: shooter.brawler, vx: cos(angle) * 15, vy: sin(angle) * 15, damage: 1800, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: true, isSuper: true, active: true, }); } 
-    else { shooter.dashTicks = 12; shooter.dashVx = cos(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.dashVy = sin(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.dashHitTargets = []; }
+    if (isSuper) { 
+      projectiles.push({ x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y, maxRange: BRAWLER_STATS["Mortis"].range * 3.5, brawlerName: shooter.brawler, vx: cos(angle) * 15, vy: sin(angle) * 15, damage: 1800, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: true, isSuper: true, active: true, }); 
+    } 
+    else { 
+      shooter.dashTicks = 10; shooter.dashVx = cos(angle) * ((BRAWLER_STATS["Mortis"].range * 0.6) / 10); shooter.dashVy = sin(angle) * ((BRAWLER_STATS["Mortis"].range * 0.6) / 10); shooter.dashHitTargets = []; 
+    }
     if (isSuper) shooter.superCooldown = shooter.maxCooldown; else shooter.cooldown = shooter.maxCooldown; return; 
   }
 
@@ -506,7 +507,7 @@ function executeFrankSmash(frank) {
   }
 
   for (let s of safes) {
-    if (s.team !== frank.team) { // Filter out damaging own safe
+    if (s.team !== frank.team) { 
       if (dist(frank.x, frank.y, s.x, s.y) - (s.r / 2) <= range) {
         let diff = atan2(s.y - frank.y, s.x - frank.x) - frank.windupAngle;
         while (diff > PI) diff -= TWO_PI; while (diff < -PI) diff += TWO_PI;
@@ -557,7 +558,11 @@ function drawWeapon(player, angle) {
       else { fill(100); rect(15, -4, 35, 8); fill("#8B4513"); rect(5, -4, 15, 10); }
       break;
     case "Colt": fill(100); rect(15, -12, 15, 6); rect(15, 6, 15, 6); break;
-    case "Leon": fill("yellow"); rect(20, -2, 10, 4); rect(23, -5, 4, 10); break;
+    case "Leon": 
+      let lImg = brawlerImages["LeonWeapon"];
+      if (lImg && lImg.width > 10) { push(); translate(20, 0); imageMode(CENTER); image(lImg, 0, 0, 25 * (lImg.width / lImg.height), 25); pop(); }
+      else { fill("yellow"); rect(20, -2, 10, 4); rect(23, -5, 4, 10); }
+      break;
     case "Piper": stroke("#00a8ff"); strokeWeight(4); line(10, 0, 40, 0); fill("#00a8ff"); noStroke(); arc(40, 0, 20, 20, -PI / 2, PI / 2); break;
     case "Mortis": fill("#8B4513"); rect(10, -3, 30, 6); fill(150); rect(40, -10, 10, 20); break;
     case "Dynamike": fill("red"); rect(15, -12, 15, 8); rect(15, 4, 15, 8); fill("white"); rect(30, -10, 4, 4); rect(30, 6, 4, 4); break;
@@ -616,13 +621,11 @@ function drawGame() {
   else if (mode === "BRAWL BALL") background("#27ae60");
   else if (mode === "HEIST") background("#7f8c8d");
 
-  // Draw Goals
   if (mode === "BRAWL BALL") {
     fill(255, 255, 255, 60); noStroke(); rectMode(CENTER);
     rect(10, height/2, 20, 200); rect(width - 10, height/2, 20, 200);
   }
 
-  // Draw Safes
   if (mode === "HEIST") {
     for (let s of safes) {
       push(); translate(s.x, s.y); fill("#8e44ad"); stroke("#2c3e50"); strokeWeight(4); rectMode(CENTER); rect(0, 0, s.r, s.r, 10);
@@ -632,7 +635,6 @@ function drawGame() {
     }
   }
 
-  // Draw loose ball behind players
   if (mode === "BRAWL BALL" && ball && !ball.owner) {
     push(); fill("#F5F5DC"); stroke("#8B4513"); strokeWeight(2); circle(ball.x, ball.y, 20);
     noFill(); arc(ball.x - 5, ball.y, 10, 20, -PI/2, PI/2); arc(ball.x + 5, ball.y, 10, 20, PI/2, -PI/2); pop();
@@ -641,12 +643,11 @@ function drawGame() {
   let gamepads = [];
   if (useControllers && navigator.getGamepads) gamepads = navigator.getGamepads();
 
-  // Primary Update Loop (Handles dead players & respawn)
   for (let p of activePlayers) {
     if (p.hp <= 0) {
       if (mode !== "KNOCKOUT") {
         p.respawnTimer++;
-        if (p.respawnTimer >= 420) { // 7 second respawn delay
+        if (p.respawnTimer >= 420) { 
           p.hp = p.maxHp;
           p.x = p.startX;
           p.y = p.startY;
@@ -677,7 +678,6 @@ function drawGame() {
     if (p.invisTicks > 0) { p.invisTicks--; if (p.invisTicks <= 0) p.isInvisible = false; }
   }
 
-  // Active Player Movement & Combat Loop
   for (let p of activePlayers) {
     if (p.hp <= 0) continue;
     let pRad = p.r / 2; let nextX = p.x; let nextY = p.y; 
@@ -723,18 +723,17 @@ function drawGame() {
           let range = BRAWLER_STATS[p.brawler].range;
           let optimalMinDist = range * 0.4; let optimalMaxDist = range * 0.8; let attackDist = range * 0.9;
 
-          // Advanced Bot Objective AI overrides
           if (mode === "BRAWL BALL" && ball) {
             if (ball.owner === p.id) {
               targetX = p.team === "blue" ? width : 0; targetY = height / 2;
               d = dist(p.x, p.y, targetX, targetY);
-              optimalMinDist = 0; optimalMaxDist = Infinity; attackDist = 0; // Rush goal
+              optimalMinDist = 0; optimalMaxDist = Infinity; attackDist = 0; 
               if (d < 300 || (target && dist(p.x, p.y, target.x, target.y) < 150)) {
                 if (p.ammo > 0) shootProjectile(p, null, p.hits >= BRAWLER_STATS[p.brawler].hitsToSuper, atan2(targetY - p.y, targetX - p.x));
               }
             } else if (!ball.owner) {
               targetX = ball.x; targetY = ball.y; d = dist(p.x, p.y, targetX, targetY);
-              optimalMinDist = 0; optimalMaxDist = Infinity; attackDist = 0; // Rush loose ball
+              optimalMinDist = 0; optimalMaxDist = Infinity; attackDist = 0; 
             } else {
               let ownerPl = activePlayers.find(pl => pl.id === ball.owner);
               if (ownerPl && ownerPl.team !== p.team) { targetX = ownerPl.x; targetY = ownerPl.y; d = dist(p.x, p.y, targetX, targetY); }
@@ -755,36 +754,40 @@ function drawGame() {
           else if (p.brawler === "Doug") { optimalMinDist = 10; optimalMaxDist = (range / 2) * 0.8; attackDist = (range / 2) * 0.9; }
           else if (p.brawler === "Mortis" || p.brawler === "Frank") { optimalMinDist = 10; optimalMaxDist = range * 0.8; attackDist = range * 0.9; }
 
-          let moveAngle = angleToEnemy; let isMoving = false;
+          let desiredAngle = angleToEnemy; let isMoving = false;
           if (mode !== "BRAWL BALL" || (ball && ball.owner !== p.id && ball.owner)) {
-            if (p.hp < p.maxHp * 0.35 || d < optimalMinDist) { moveAngle = angleToEnemy + PI; isMoving = true; } 
-            else if (d > optimalMaxDist) { moveAngle = angleToEnemy; isMoving = true; }
-            else { moveAngle = angleToEnemy + (p.id.charCodeAt(p.id.length - 1) % 2 === 0 ? PI/2 : -PI/2); isMoving = true; }
+            if (p.hp < p.maxHp * 0.35 || d < optimalMinDist) { desiredAngle = angleToEnemy + PI; isMoving = true; } 
+            else if (d > optimalMaxDist) { desiredAngle = angleToEnemy; isMoving = true; }
+            else { desiredAngle = angleToEnemy + (p.id.charCodeAt(p.id.length - 1) % 2 === 0 ? PI/2 : -PI/2); isMoving = true; }
           } else {
-            isMoving = true; // Always move if fetching loose ball or rushing goal
+            isMoving = true; 
           }
 
-          // FIX: Bots will now move even if 'target' is null (like when running to an empty goal)
           if (isMoving) { 
-            moveAngle += sin(frameCount * 0.05 + p.id.length) * 0.5;
+            desiredAngle += sin(frameCount * 0.05 + p.id.length) * 0.5;
             let isBlocked = (tx, ty) => checkWallCollision(tx, ty, pRad) || tx < pRad*2 || tx > width - pRad*2 || ty < pRad*2 || ty > height - pRad*2;
             
-            if (isBlocked(p.x + cos(moveAngle) * (p.speed * 4), p.y + sin(moveAngle) * (p.speed * 4))) {
-              let leftAngle = moveAngle - PI / 2.5; let rightAngle = moveAngle + PI / 2.5;
-              
+            if (isBlocked(p.x + cos(desiredAngle) * (p.speed * 4), p.y + sin(desiredAngle) * (p.speed * 4))) {
+              let leftAngle = desiredAngle - PI / 2.5; let rightAngle = desiredAngle + PI / 2.5;
               if (!isBlocked(p.x + cos(leftAngle) * (p.speed * 3), p.y + sin(leftAngle) * (p.speed * 3))) {
-                moveAngle = leftAngle;
+                desiredAngle = leftAngle;
               } else if (!isBlocked(p.x + cos(rightAngle) * (p.speed * 3), p.y + sin(rightAngle) * (p.speed * 3))) {
-                moveAngle = rightAngle;
+                desiredAngle = rightAngle;
               } else {
-                // FIX: "Sharp Whiskers" - Allows them to escape the massive Brawl Ball walls!
-                let sharpLeft = moveAngle - PI / 1.5; let sharpRight = moveAngle + PI / 1.5;
-                if (!isBlocked(p.x + cos(sharpLeft) * (p.speed * 3), p.y + sin(sharpLeft) * (p.speed * 3))) moveAngle = sharpLeft;
-                else if (!isBlocked(p.x + cos(sharpRight) * (p.speed * 3), p.y + sin(sharpRight) * (p.speed * 3))) moveAngle = sharpRight;
-                else moveAngle += PI; // 180 turnaround if deeply stuck
+                let sharpLeft = desiredAngle - PI / 1.5; let sharpRight = desiredAngle + PI / 1.5;
+                if (!isBlocked(p.x + cos(sharpLeft) * (p.speed * 3), p.y + sin(sharpLeft) * (p.speed * 3))) desiredAngle = sharpLeft;
+                else if (!isBlocked(p.x + cos(sharpRight) * (p.speed * 3), p.y + sin(sharpRight) * (p.speed * 3))) desiredAngle = sharpRight;
+                else desiredAngle += PI; 
               }
             }
-            nextX += cos(moveAngle) * p.speed; nextY += sin(moveAngle) * p.speed;
+
+            if (p.currentMoveAngle === undefined) p.currentMoveAngle = desiredAngle;
+            let angleDiff = desiredAngle - p.currentMoveAngle;
+            while (angleDiff > PI) angleDiff -= TWO_PI;
+            while (angleDiff < -PI) angleDiff += TWO_PI;
+            p.currentMoveAngle += angleDiff * 0.15; // Smooth steering!
+
+            nextX += cos(p.currentMoveAngle) * p.speed; nextY += sin(p.currentMoveAngle) * p.speed;
           }
 
           let useSuper = p.hits >= BRAWLER_STATS[p.brawler].hitsToSuper;
@@ -796,7 +799,6 @@ function drawGame() {
             useSuper = false; 
           }
 
-          // FIX: Stop bots from shooting their guns at the empty goal / loose ball
           if (d <= attackDist && wantsToFire && (target || (ball && ball.owner === p.id))) {
             let fireChance = 0.03; 
             if (p.brawler === "Edgar" && d <= BRAWLER_STATS["Edgar"].range) fireChance = 0.8; 
@@ -835,14 +837,12 @@ function drawGame() {
     p.x = constrain(p.x, pRad, width - pRad); p.y = constrain(p.y, pRad, height - pRad);
   }
 
-  // Ball physics & pickup loop
   if (mode === "BRAWL BALL" && ball) {
     if (ball.owner) {
       let owner = activePlayers.find(pl => pl.id === ball.owner);
       if (owner && owner.hp > 0) { 
         ball.x = owner.x; ball.y = owner.y; 
         
-        // Prevent walking into own goal - force drop ball
         if (owner.team === "blue" && ball.x < 20 && ball.y > height/2 - 100 && ball.y < height/2 + 100) {
           ball.owner = null; ball.x = 25; ball.vx = 8;
         } else if (owner.team === "red" && ball.x > width - 20 && ball.y > height/2 - 100 && ball.y < height/2 + 100) {
@@ -936,7 +936,7 @@ function drawGame() {
         }
       }
       for (let s of safes) { 
-        if (s.team !== b.ownerTeam) { // ONLY damage enemy safe!
+        if (s.team !== b.ownerTeam) {
           let dx = b.x - s.x; let dy = b.y - s.y; let threshold = r + s.r / 2; if (dx*dx + dy*dy < threshold*threshold) { s.hp -= b.damage; addDamage(b.owner, b.damage); } 
         }
       }
@@ -956,7 +956,7 @@ function drawGame() {
         if (e.team !== pd.ownerTeam && e.hp > 0) { let dx = pd.x - e.x; let dy = pd.y - e.y; let threshold = pd.radius + e.r / 2; if (dx*dx + dy*dy < threshold*threshold) { e.hp -= pd.damage; addDamage(pd.owner, pd.damage); e.lastCombatTime = frameCount; let shooter = activePlayers.find(pl => pl.id === pd.owner); if (shooter) shooter.hits++; } }
       }
       for (let s of safes) { 
-        if (s.team !== pd.ownerTeam) { // ONLY damage enemy safe!
+        if (s.team !== pd.ownerTeam) {
           let dx = pd.x - s.x; let dy = pd.y - s.y; let threshold = pd.radius + s.r / 2; if (dx*dx + dy*dy < threshold*threshold) { s.hp -= pd.damage; addDamage(pd.owner, pd.damage); } 
         }
       }
@@ -971,7 +971,13 @@ function drawGame() {
 
     noStroke();
     if (p.brawlerName === "Dynamike") { push(); fill(p.isSuper ? "#8B4513" : "red"); translate(p.x, p.y); rotate(frameCount * 0.2); rectMode(CENTER); if (p.isSuper) rect(0, 0, 20, 24, 3); else rect(0, 0, 8, 16, 2); pop(); } 
-    else if (p.isSuper) { if (p.brawlerName === "Mortis") { fill("#8e44ad"); push(); translate(p.x, p.y); rotate(atan2(p.vy, p.vx)); ellipse(0, 0, 15, 40); pop(); } else { fill("#f1c40f"); circle(p.x, p.y, 18); } } 
+    else if (p.isSuper) { 
+      if (p.brawlerName === "Mortis") { 
+        let mImg = brawlerImages["MortisSuper"];
+        if (mImg && mImg.width > 10) { push(); translate(p.x, p.y); rotate(atan2(p.vy, p.vx)); imageMode(CENTER); image(mImg, 0, 0, 40 * (mImg.width / mImg.height), 40); pop(); }
+        else { fill("#8e44ad"); push(); translate(p.x, p.y); rotate(atan2(p.vy, p.vx)); ellipse(0, 0, 15, 40); pop(); }
+      } else { fill("#f1c40f"); circle(p.x, p.y, 18); } 
+    } 
     else { fill(p.ownerTeam === "blue" ? "#3498db" : "#e74c3c"); circle(p.x, p.y, 14); }
 
     if (!p.ignoresWalls && checkProjWallCollision(p.x, p.y)) p.active = false;
@@ -994,7 +1000,7 @@ function drawGame() {
     }
     if (!hitEnemy) {
       for (let s of safes) {
-        if (s.team !== p.ownerTeam) { // ONLY damage enemy safe!
+        if (s.team !== p.ownerTeam) {
           let dx = p.x - s.x; let dy = p.y - s.y; let threshold = (s.r / 2) + hitRadius;
           if (dx*dx + dy*dy < threshold*threshold) {
             hitEnemy = true;
@@ -1018,7 +1024,6 @@ function drawGame() {
 
   noStroke();
   
-  // Render Players & Draw Respawn HUD
   for (let p of activePlayers) {
     if (p.hp <= 0 && mode !== "KNOCKOUT") {
       let secLeft = Math.ceil((420 - p.respawnTimer) / 60);
@@ -1099,7 +1104,6 @@ function drawGame() {
   let redAlive = activePlayers.some(p => p.team === "red" && p.hp > 0);
   let roundOver = false;
 
-  // Win Conditions
   if (mode === "KNOCKOUT") {
     if (!blueAlive && !redAlive) roundOver = true; 
     else if (!blueAlive) { redWins++; roundOver = true; } 
@@ -1112,9 +1116,9 @@ function drawGame() {
   } else if (mode === "HEIST") {
     let bSafe = safes.find(s => s.team === "blue");
     let rSafe = safes.find(s => s.team === "red");
-    if (bSafe && bSafe.hp <= 0 && rSafe && rSafe.hp <= 0) { blueWins = 2; redWins = 2; roundOver = true; } // Tie ends match immediately
-    else if (bSafe && bSafe.hp <= 0) { redWins = 2; roundOver = true; } // Insta-win ends match immediately
-    else if (rSafe && rSafe.hp <= 0) { blueWins = 2; roundOver = true; } // Insta-win ends match immediately
+    if (bSafe && bSafe.hp <= 0 && rSafe && rSafe.hp <= 0) { blueWins = 2; redWins = 2; roundOver = true; } 
+    else if (bSafe && bSafe.hp <= 0) { redWins = 2; roundOver = true; } 
+    else if (rSafe && rSafe.hp <= 0) { blueWins = 2; roundOver = true; } 
   }
 
   if (roundOver) {
