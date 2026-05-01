@@ -253,7 +253,7 @@ function createPlayerObject(id, team, brawlerName, isBot) {
   return {
     id: id, team: team, brawler: brawlerName, isBot: isBot,
     x: 0, y: 0, startX: 0, startY: 0, r: 35, speed: isBot ? 3.5 : 4, cooldown: 0, maxCooldown: 30, 
-    hits: 0, ammo: 3, reloadTimer: 0, lastCombatTime: 0, dashTicks: 0, dashVx: 0, dashVy: 0, hasDamagedInDash: false,
+    hits: 0, ammo: 3, reloadTimer: 0, lastCombatTime: 0, dashTicks: 0, dashVx: 0, dashVy: 0, dashHitTargets: [],
     hp: stats.hp, maxHp: stats.hp, damage: stats.damage, superDesc: stats.superDesc,
     stunTicks: 0, attackWindup: 0, leonShots: 0, edgarShots: 0, coltShots: 0, jumpTicks: 0, isInvisible: false, invisTicks: 0, hotdogTicks: 0,
     aimingSuper: false, prevRB: false, respawnTimer: 0, superCooldown: 0
@@ -307,7 +307,7 @@ function startNextRound() {
     p.hp = p.maxHp; p.cooldown = 0; p.ammo = 3; p.reloadTimer = 0; p.stunTicks = 0; p.attackWindup = 0;
     p.leonShots = 0; p.edgarShots = 0; p.coltShots = 0; p.lastCombatTime = frameCount; 
     p.dashTicks = 0; p.jumpTicks = 0; p.isInvisible = false; p.invisTicks = 0; p.hotdogTicks = 0;
-    p.aimingSuper = false; p.prevRB = false; p.respawnTimer = 0; p.superCooldown = 0;
+    p.aimingSuper = false; p.prevRB = false; p.respawnTimer = 0; p.superCooldown = 0; p.dashHitTargets = [];
   }
 }
 
@@ -457,7 +457,7 @@ function shootProjectile(shooter, target, isSuper = false, overrideAngle = null)
 
   if (shooter.brawler === "Mortis") {
     if (isSuper) { projectiles.push({ x: shooter.x, y: shooter.y, startX: shooter.x, startY: shooter.y, maxRange: BRAWLER_STATS["Mortis"].range * 2, brawlerName: shooter.brawler, vx: cos(angle) * 15, vy: sin(angle) * 15, damage: 1800, owner: shooter.id, ownerTeam: shooter.team, ignoresWalls: true, isSuper: true, active: true, }); } 
-    else { shooter.dashTicks = 12; shooter.dashVx = cos(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.dashVy = sin(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.hasDamagedInDash = false; }
+    else { shooter.dashTicks = 12; shooter.dashVx = cos(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.dashVy = sin(angle) * (BRAWLER_STATS["Mortis"].range / 12); shooter.dashHitTargets = []; }
     if (isSuper) shooter.superCooldown = shooter.maxCooldown; else shooter.cooldown = shooter.maxCooldown; return; 
   }
 
@@ -690,14 +690,27 @@ function drawGame() {
     } else if (p.dashTicks > 0) {
       p.dashTicks--; nextX = p.x + p.dashVx; nextY = p.y + p.dashVy;
       if (!checkWallCollision(nextX, p.y, pRad)) p.x = nextX; if (!checkWallCollision(p.x, nextY, pRad)) p.y = nextY;
-      if (!p.hasDamagedInDash) {
-        for (let e of activePlayers) {
-          if (e.team !== p.team && e.hp > 0) {
-            let dx = p.x - e.x; let dy = p.y - e.y; let threshold = pRad + (e.r / 2) + 20;
-            if (dx*dx + dy*dy < threshold*threshold) { e.hp -= p.damage; addDamage(p.id, p.damage); e.lastCombatTime = frameCount; p.lastCombatTime = frameCount; p.hits++; }
+      
+      if (!p.dashHitTargets) p.dashHitTargets = [];
+      for (let e of activePlayers) {
+        if (e.team !== p.team && e.hp > 0 && !p.dashHitTargets.includes(e.id)) {
+          let dx = p.x - e.x; let dy = p.y - e.y; let threshold = pRad + (e.r / 2) + 20;
+          if (dx*dx + dy*dy < threshold*threshold) { 
+            e.hp -= p.damage; addDamage(p.id, p.damage); e.lastCombatTime = frameCount; p.lastCombatTime = frameCount; p.hits++; 
+            p.dashHitTargets.push(e.id);
           }
         }
-        p.hasDamagedInDash = true; 
+      }
+      if (mode === "HEIST") {
+        for (let s of safes) {
+          if (s.team !== p.team && s.hp > 0 && !p.dashHitTargets.includes(s.id)) {
+            let dx = p.x - s.x; let dy = p.y - s.y; let threshold = pRad + (s.r / 2) + 20;
+            if (dx*dx + dy*dy < threshold*threshold) { 
+              s.hp -= p.damage; addDamage(p.id, p.damage); p.hits++; 
+              p.dashHitTargets.push(s.id);
+            }
+          }
+        }
       }
     } else {
       if (p.isBot) {
@@ -751,13 +764,25 @@ function drawGame() {
             isMoving = true; // Always move if fetching loose ball or rushing goal
           }
 
-          if (isMoving && target) { // Move only if we have a destination
+          // FIX: Bots will now move even if 'target' is null (like when running to an empty goal)
+          if (isMoving) { 
             moveAngle += sin(frameCount * 0.05 + p.id.length) * 0.5;
             let isBlocked = (tx, ty) => checkWallCollision(tx, ty, pRad) || tx < pRad*2 || tx > width - pRad*2 || ty < pRad*2 || ty > height - pRad*2;
+            
             if (isBlocked(p.x + cos(moveAngle) * (p.speed * 4), p.y + sin(moveAngle) * (p.speed * 4))) {
               let leftAngle = moveAngle - PI / 2.5; let rightAngle = moveAngle + PI / 2.5;
-              if (!isBlocked(p.x + cos(leftAngle) * (p.speed * 3), p.y + sin(leftAngle) * (p.speed * 3))) moveAngle = leftAngle;
-              else if (!isBlocked(p.x + cos(rightAngle) * (p.speed * 3), p.y + sin(rightAngle) * (p.speed * 3))) moveAngle = rightAngle;
+              
+              if (!isBlocked(p.x + cos(leftAngle) * (p.speed * 3), p.y + sin(leftAngle) * (p.speed * 3))) {
+                moveAngle = leftAngle;
+              } else if (!isBlocked(p.x + cos(rightAngle) * (p.speed * 3), p.y + sin(rightAngle) * (p.speed * 3))) {
+                moveAngle = rightAngle;
+              } else {
+                // FIX: "Sharp Whiskers" - Allows them to escape the massive Brawl Ball walls!
+                let sharpLeft = moveAngle - PI / 1.5; let sharpRight = moveAngle + PI / 1.5;
+                if (!isBlocked(p.x + cos(sharpLeft) * (p.speed * 3), p.y + sin(sharpLeft) * (p.speed * 3))) moveAngle = sharpLeft;
+                else if (!isBlocked(p.x + cos(sharpRight) * (p.speed * 3), p.y + sin(sharpRight) * (p.speed * 3))) moveAngle = sharpRight;
+                else moveAngle += PI; // 180 turnaround if deeply stuck
+              }
             }
             nextX += cos(moveAngle) * p.speed; nextY += sin(moveAngle) * p.speed;
           }
@@ -771,7 +796,8 @@ function drawGame() {
             useSuper = false; 
           }
 
-          if (d <= attackDist && wantsToFire) {
+          // FIX: Stop bots from shooting their guns at the empty goal / loose ball
+          if (d <= attackDist && wantsToFire && (target || (ball && ball.owner === p.id))) {
             let fireChance = 0.03; 
             if (p.brawler === "Edgar" && d <= BRAWLER_STATS["Edgar"].range) fireChance = 0.8; 
             else if (p.brawler === "Shelly" && d <= BRAWLER_STATS["Shelly"].range * 0.6) fireChance = 0.4;
